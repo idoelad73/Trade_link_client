@@ -1,0 +1,26 @@
+{
+  "nav": {
+    "home": "Home",
+    "jobs": "Find Jobs",
+    "trades": "Find Trades",
+    "dashboard": "Dashboard",
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout"
+  },
+  "landing": {
+    "badge": "New — Now available",
+    "tagline": "Bridge the gap between ideas and results.",
+    "subtitle": "TradeLink helps you connect, collaborate, and deliver — all in one clean, powerful workspace.",
+    "cta": "Let's start work"
+  },
+  "features": {
+    "findPro": "Find the Right Pro",
+    "findProDesc": "Post your project and instantly connect with verified tradespeople — electricians, plumbers, builders, and more — ready to get the job done.",
+    "findJob": "Trades, Meet Your Next Job",
+    "findJobDesc": "Browse local projects looking for your skills. Get hired faster by sites and homeowners who need exactly what you offer.",
+    "trusted": "Trusted on Both Sides",
+    "trustedDesc": "Reviews, profiles, and verified credentials so every match — client or trade — starts with confidence."
+  },
+  "footer": "© 2026 TradeLink. All rights reserved."
+}

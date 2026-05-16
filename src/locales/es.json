@@ -1,0 +1,26 @@
+{
+  "nav": {
+    "home": "Inicio",
+    "jobs": "Buscar Trabajos",
+    "trades": "Buscar Profesionales",
+    "dashboard": "Panel",
+    "login": "Iniciar sesión",
+    "register": "Registrarse",
+    "logout": "Cerrar sesión"
+  },
+  "landing": {
+    "badge": "Nuevo — Ya disponible",
+    "tagline": "Conecta ideas con resultados.",
+    "subtitle": "TradeLink te ayuda a conectar, colaborar y entregar — todo en un espacio de trabajo limpio y poderoso.",
+    "cta": "Empecemos a trabajar"
+  },
+  "features": {
+    "findPro": "Encuentra al Profesional Ideal",
+    "findProDesc": "Publica tu proyecto y conecta al instante con profesionales verificados — electricistas, fontaneros, constructores y más — listos para trabajar.",
+    "findJob": "Oficios, Encuentra tu Próximo Trabajo",
+    "findJobDesc": "Explora proyectos locales que buscan tus habilidades. Consigue más trabajo con obras y propietarios que necesitan exactamente lo que ofreces.",
+    "trusted": "Confianza en Ambos Lados",
+    "trustedDesc": "Reseñas, perfiles y credenciales verificadas para que cada conexión — cliente o profesional — comience con seguridad."
+  },
+  "footer": "© 2026 TradeLink. Todos los derechos reservados."
+}
