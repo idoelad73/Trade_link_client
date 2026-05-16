@@ -218,7 +218,7 @@ export default function TradeRegister() {
 
       const data = await registerTrade(fd);
       setAuth(data);
-      navigate('/dashboard');
+      navigate('/dashboard/trade');
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {

@@ -19,19 +19,8 @@ import PonsLanding from '../PonsLanding';
 import RegistrationArea from '../pages/RegistrationArea';
 import TradeRegister from '../pages/register/TradeRegister';
 import ContractorRegister from '../pages/register/ContractorRegister';
-
-// Temporary dashboard placeholder until the real dashboard is built
-function DashboardPlaceholder() {
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'sans-serif', background: '#f0f9ff' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '3rem' }}>🎉</div>
-        <h1 style={{ color: '#0ea5e9', fontWeight: 800, fontSize: '2rem', margin: '1rem 0 0.5rem' }}>Registration Successful!</h1>
-        <p style={{ color: '#64748b' }}>Dashboard coming soon.</p>
-      </div>
-    </div>
-  );
-}
+import ContractorDashboard from '../pages/dashboard/ContractorDashboard';
+import TradeDashboard from '../pages/dashboard/TradeDashboard';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -41,7 +30,10 @@ const router = createBrowserRouter(
       <Route path="/register" element={<RegistrationArea />} />
       <Route path="/register/trade" element={<TradeRegister />} />
       <Route path="/register/contractor" element={<ContractorRegister />} />
-      <Route path="/dashboard" element={<DashboardPlaceholder />} />
+
+      {/* Dashboards */}
+      <Route path="/dashboard/contractor" element={<ContractorDashboard />} />
+      <Route path="/dashboard/trade"      element={<TradeDashboard />} />
 
       {/* Auth — uncomment when pages are built */}
       {/* <Route element={<AuthLayout />}>

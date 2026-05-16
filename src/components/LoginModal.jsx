@@ -120,7 +120,7 @@ export default function LoginModal() {
 
       setAuth(data);
       closeModal();
-      navigate('/dashboard');
+      navigate(isTrade ? '/dashboard/trade' : '/dashboard/contractor');
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed. Please try again.');
     } finally {

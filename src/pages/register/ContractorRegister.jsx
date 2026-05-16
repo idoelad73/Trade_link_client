@@ -128,7 +128,7 @@ export default function ContractorRegister() {
       const { confirmPassword: _, ...payload } = form;
       const data = await registerContractor({ ...payload, expertise: JSON.stringify(expertise) });
       setAuth(data);
-      navigate('/dashboard');
+      navigate('/dashboard/contractor');
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {

@@ -4,18 +4,18 @@ import LoginModal from './LoginModal';
 
 const loginMenu = {
   en: {
-    button: 'Login',
+    button:     'Login',
     trade:      '🔧 Trade Professional',
     contractor: '🏗️ Building Contractor',
   },
   es: {
-    button: 'Ingresar',
+    button:     'Ingresar',
     trade:      '🔧 Profesional',
     contractor: '🏗️ Contratista',
   },
 };
 
-export default function Navbar() {
+export default function Navbar({ showLogin = false }) {
   const { lang, setLang, openModal, activeModal } = useUIStore();
   const [showLoginMenu, setShowLoginMenu] = useState(false);
   const menuRef = useRef();
@@ -23,6 +23,7 @@ export default function Navbar() {
 
   // Close dropdown on outside click
   useEffect(() => {
+    if (!showLogin) return;
     function onClickOutside(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setShowLoginMenu(false);
@@ -30,11 +31,12 @@ export default function Navbar() {
     }
     document.addEventListener('mousedown', onClickOutside);
     return () => document.removeEventListener('mousedown', onClickOutside);
-  }, []);
+  }, [showLogin]);
 
   return (
     <>
       <nav className="flex items-center justify-between px-8 py-5 bg-white/70 backdrop-blur-md border-b border-yellow-100 sticky top-0 z-50 shadow-sm">
+
         {/* Logo */}
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-amber-400 flex items-center justify-center shadow">
@@ -46,41 +48,42 @@ export default function Navbar() {
         {/* Right side controls */}
         <div className="flex items-center gap-3">
 
-          {/* Login dropdown */}
-          <div ref={menuRef} className="relative">
-            <button
-              onClick={() => setShowLoginMenu((v) => !v)}
-              className="flex items-center gap-1.5 bg-white border border-sky-200 hover:border-sky-400 text-sky-700 text-sm font-semibold rounded-xl px-4 py-2 shadow-sm hover:shadow-md transition-all duration-150"
-            >
-              {m.button}
-              <svg
-                className={`w-3.5 h-3.5 text-sky-400 transition-transform duration-200 ${showLoginMenu ? 'rotate-180' : ''}`}
-                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          {/* Login dropdown — only shown when showLogin=true */}
+          {showLogin && (
+            <div ref={menuRef} className="relative">
+              <button
+                onClick={() => setShowLoginMenu((v) => !v)}
+                className="flex items-center gap-1.5 bg-white border border-sky-200 hover:border-sky-400 text-sky-700 text-sm font-semibold rounded-xl px-4 py-2 shadow-sm hover:shadow-md transition-all duration-150"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
+                {m.button}
+                <svg
+                  className={`w-3.5 h-3.5 text-sky-400 transition-transform duration-200 ${showLoginMenu ? 'rotate-180' : ''}`}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
 
-            {/* Dropdown menu */}
-            {showLoginMenu && (
-              <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 p-1.5 z-50">
-                <button
-                  onClick={() => { openModal('loginTrade'); setShowLoginMenu(false); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-sky-50 hover:text-sky-700 transition-colors text-left"
-                >
-                  <span className="w-7 h-7 rounded-lg bg-sky-100 flex items-center justify-center text-base flex-shrink-0">🔧</span>
-                  {m.trade}
-                </button>
-                <button
-                  onClick={() => { openModal('loginContractor'); setShowLoginMenu(false); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition-colors text-left"
-                >
-                  <span className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center text-base flex-shrink-0">🏗️</span>
-                  {m.contractor}
-                </button>
-              </div>
-            )}
-          </div>
+              {showLoginMenu && (
+                <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 p-1.5 z-50">
+                  <button
+                    onClick={() => { openModal('loginTrade'); setShowLoginMenu(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-sky-50 hover:text-sky-700 transition-colors text-left"
+                  >
+                    <span className="w-7 h-7 rounded-lg bg-sky-100 flex items-center justify-center text-base flex-shrink-0">🔧</span>
+                    {m.trade}
+                  </button>
+                  <button
+                    onClick={() => { openModal('loginContractor'); setShowLoginMenu(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition-colors text-left"
+                  >
+                    <span className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center text-base flex-shrink-0">🏗️</span>
+                    {m.contractor}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Language selector */}
           <div className="relative">
@@ -102,8 +105,10 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* Login modal — rendered when activeModal is loginTrade or loginContractor */}
-      {(activeModal === 'loginTrade' || activeModal === 'loginContractor') && <LoginModal />}
+      {/* Modal — only mounted when login is active */}
+      {showLogin && (activeModal === 'loginTrade' || activeModal === 'loginContractor') && (
+        <LoginModal />
+      )}
     </>
   );
 }

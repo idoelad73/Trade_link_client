@@ -31,7 +31,7 @@ export default function RegistrationArea() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-yellow-50 to-amber-50 font-sans text-slate-800 overflow-x-hidden">
 
-      <Navbar />
+      <Navbar showLogin />
 
       <section className="relative flex flex-col items-center justify-center text-center px-6 pt-20 pb-32 overflow-x-hidden">
 
