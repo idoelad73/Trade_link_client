@@ -146,7 +146,7 @@ function FileField({ label, hint, name, accept, onChange, value }) {
 }
 
 export default function TradeRegister() {
-  const { lang } = useUIStore();
+  const { lang, openModal } = useUIStore();
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
   const t = content[lang];
@@ -162,8 +162,9 @@ export default function TradeRegister() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm]   = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
-  const [error, setError]     = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError]         = useState('');
+  const [emailTaken, setEmailTaken] = useState(false);
+  const [loading, setLoading]     = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
@@ -220,7 +221,13 @@ export default function TradeRegister() {
       setAuth(data);
       navigate('/dashboard/trade');
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      if (err.response?.status === 409) {
+        setEmailTaken(true);
+        setError('');
+      } else {
+        setEmailTaken(false);
+        setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -441,6 +448,24 @@ export default function TradeRegister() {
           </button>
 
           {/* Error */}
+          {emailTaken && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-700 flex items-start gap-3">
+              <span className="text-lg leading-none mt-0.5">📧</span>
+              <div>
+                <p className="font-semibold">This email is already registered.</p>
+                <p className="mt-0.5 text-amber-600">
+                  Already have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={() => openModal('loginTrade')}
+                    className="font-bold underline hover:text-amber-800 transition-colors"
+                  >
+                    Sign in here
+                  </button>
+                </p>
+              </div>
+            </div>
+          )}
           {error && (
             <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
               {error}

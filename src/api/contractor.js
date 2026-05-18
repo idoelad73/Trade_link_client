@@ -10,3 +10,8 @@ export const getSites    = ()      => api.get('/contractor/sites').then(r => r.d
 export const getSite     = (id)    => api.get(`/contractor/sites/${id}`).then(r => r.data.site);
 export const updateSite  = (id, form) => api.patch(`/contractor/sites/${id}`, form).then(r => r.data.site);
 export const deleteSite  = (id)    => api.delete(`/contractor/sites/${id}`).then(r => r.data);
+
+// Trade search
+export const findTradesForSite = (siteId, trade, distance, unit) =>
+  api.get(`/contractor/sites/${siteId}/find-trades`, { params: { trade, distance, unit } })
+     .then(r => r.data);
