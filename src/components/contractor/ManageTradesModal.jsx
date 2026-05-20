@@ -32,7 +32,8 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
 
-  const [trades,  setTrades]  = useState([...( site.tradesNeeded || [])]);
+  // trades is [{name, assigned}] — preserve assigned state throughout
+  const [trades,  setTrades]  = useState(() => site.tradesNeeded || []);
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
 
@@ -42,10 +43,10 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
     return () => document.removeEventListener('keydown', h);
   }, [onClose]);
 
-  const removeTrade = (tr) => setTrades((prev) => prev.filter((x) => x !== tr));
-  const addTrade    = (tr) => setTrades((prev) => [...prev, tr]);
+  const removeTrade = (name) => setTrades((prev) => prev.filter((x) => x.name !== name));
+  const addTrade    = (name) => setTrades((prev) => [...prev, { name, assigned: false }]);
 
-  const available = TRADE_PROFESSIONALITIES.filter((tr) => !trades.includes(tr));
+  const available = TRADE_PROFESSIONALITIES.filter((tr) => !trades.some((x) => x.name === tr));
   const isEmpty   = trades.length === 0;
 
   const handleSave = async () => {
@@ -102,13 +103,18 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
               <div className="flex flex-wrap gap-2">
                 {trades.map((tr) => (
                   <div
-                    key={tr}
-                    className="group flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-xl bg-amber-50 border-2 border-amber-200 text-amber-800 text-xs font-semibold transition hover:border-red-300 hover:bg-red-50"
+                    key={tr.name}
+                    className={`group flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-xl border-2 text-xs font-semibold transition hover:border-red-300 hover:bg-red-50 ${
+                      tr.assigned
+                        ? 'bg-orange-50 border-orange-300 text-orange-700'
+                        : 'bg-amber-50 border-amber-200 text-amber-800'
+                    }`}
                   >
-                    <span className="group-hover:text-red-700 transition">{tr}</span>
+                    {tr.assigned && <span className="text-orange-500">✓</span>}
+                    <span className="group-hover:text-red-700 transition">{tr.name}</span>
                     <button
                       type="button"
-                      onClick={() => removeTrade(tr)}
+                      onClick={() => removeTrade(tr.name)}
                       title="Remove"
                       className="w-5 h-5 rounded-full bg-amber-200 group-hover:bg-red-200 flex items-center justify-center text-amber-700 group-hover:text-red-600 font-bold transition text-xs"
                     >×</button>

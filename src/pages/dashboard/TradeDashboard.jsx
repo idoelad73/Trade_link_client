@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getMe } from '../../api/trade.js';
+import { getMe, updateLocation } from '../../api/trade.js';
 import TradeInfoModal from '../../components/trade/TradeInfoModal.jsx';
 import TradeSchedule from '../../components/trade/TradeSchedule.jsx';
 
@@ -46,6 +46,24 @@ export default function TradeDashboard() {
   useEffect(() => {
     getMe().then(setTradeData).catch(console.error).finally(() => setDataLoading(false));
   }, []);
+
+  // Live location updates — every 60 s, only when the trade pro has consented
+  useEffect(() => {
+    if (!tradeData?.locationConsent) return;
+    if (!navigator.geolocation) return;
+
+    const send = () => {
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => updateLocation(coords.latitude, coords.longitude).catch(() => {}),
+        () => {}, // silently ignore denied / unavailable
+        { enableHighAccuracy: false, timeout: 10000 }
+      );
+    };
+
+    send(); // fire immediately on mount
+    const id = setInterval(send, 60_000);
+    return () => clearInterval(id);
+  }, [tradeData?.locationConsent]);
 
   const handleNavClick = (item) => {
     if (item.modal) { setModalOpen(true); }
@@ -112,7 +130,10 @@ export default function TradeDashboard() {
                 <div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
               </div>
             ) : (
-              <TradeSchedule initialBusyDays={tradeData?.busyDays || []} />
+              <TradeSchedule
+                initialBusyDays={tradeData?.busyDays || []}
+                initialBookings={tradeData?.bookings || []}
+              />
             )}
           </div>
         )}

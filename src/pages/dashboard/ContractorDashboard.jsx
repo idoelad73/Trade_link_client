@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getSites, findTradesForSite } from '../../api/contractor.js';
+import { getSites, findTradesForSite, updateSite } from '../../api/contractor.js';
 import ContractorInfoModal from '../../components/contractor/ContractorInfoModal.jsx';
 import AddSiteModal from '../../components/contractor/AddSiteModal.jsx';
 import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx';
 import UpdateSitePhotoModal from '../../components/contractor/UpdateSitePhotoModal.jsx';
+import TradeCalendarModal from '../../components/contractor/TradeCalendarModal.jsx';
 
 const content = {
   en: {
@@ -38,11 +39,13 @@ const content = {
       none:       'No professionals found in this area.',
       noLocation: 'Site location could not be determined from its address.',
       error:      'Search failed. Please try again.',
-      distance:   'away',
-      busy:       'Busy today',
-      available:  'Available',
-      call:       'Call',
-      close:      'Close Results',
+      distance:    'away',
+      busy:        'Busy today',
+      available:   'Available',
+      scheduled:   'Scheduled',
+      openCal:     'Open Trade Calendar',
+      openChat:    'Open Chat',
+      close:       'Close Results',
     },
   },
   es: {
@@ -74,11 +77,13 @@ const content = {
       none:       'No se encontraron profesionales en esta área.',
       noLocation: 'No se pudo determinar la ubicación de la obra.',
       error:      'Error en la búsqueda. Inténtalo de nuevo.',
-      distance:   'de distancia',
-      busy:       'Ocupado hoy',
-      available:  'Disponible',
-      call:       'Llamar',
-      close:      'Cerrar Resultados',
+      distance:    'de distancia',
+      busy:        'Ocupado hoy',
+      available:   'Disponible',
+      scheduled:   'Programado',
+      openCal:     'Ver Calendario',
+      openChat:    'Abrir Chat',
+      close:       'Cerrar Resultados',
     },
   },
 };
@@ -96,32 +101,72 @@ function isBusyToday(busyDays = []) {
 }
 
 // ── Professional result card ─────────────────────────────────────────────────
-function ProCard({ pro, unit, t }) {
+function ProCard({ pro, unit, t, siteName, onOpenCalendar }) {
   const busy = isBusyToday(pro.busyDays);
+  const siteBooking = pro.bookings?.find((b) => b.siteName === siteName);
+
+  const formatBookingDate = (dateKey) =>
+    new Date(dateKey + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  const borderClass = siteBooking
+    ? 'border-sky-200 bg-sky-50/30'
+    : busy
+      ? 'border-red-100'
+      : 'border-emerald-100';
+
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-4">
-      <div className="flex-shrink-0">
-        {pro.photo
-          ? <img src={pro.photo} alt={pro.fullName} className="w-12 h-12 rounded-xl object-cover border border-slate-100" />
-          : <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-100 to-amber-100 flex items-center justify-center text-xl">🔧</div>
-        }
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="font-bold text-slate-800 text-sm truncate">{pro.fullName}</p>
-        <p className="text-xs text-slate-400 truncate">📍 {pro.address}</p>
-        <div className="flex items-center gap-2 mt-1">
-          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${busy ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-            {busy ? t.busy : t.available}
-          </span>
-          <span className="text-xs text-slate-400">{formatDistance(pro.distance, unit)} {t.distance}</span>
+    <div className={`bg-white rounded-2xl border shadow-sm p-4 flex flex-col gap-3 transition-all ${borderClass}`}>
+      {/* Top row: avatar + info */}
+      <div className="flex items-center gap-3">
+        <div className="flex-shrink-0">
+          {pro.photo
+            ? <img src={pro.photo} alt={pro.fullName} className="w-12 h-12 rounded-xl object-cover border border-slate-100" />
+            : <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-100 to-amber-100 flex items-center justify-center text-xl">🔧</div>
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-slate-800 text-sm truncate">{pro.fullName}</p>
+          <p className="text-xs text-slate-400 truncate">📍 {pro.address}</p>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {siteBooking ? (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200 flex items-center gap-1 flex-wrap leading-snug">
+                ✅ {t.scheduled} · {siteBooking.siteName} · {formatBookingDate(siteBooking.date)}
+              </span>
+            ) : (
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${busy ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                {busy ? t.busy : t.available}
+              </span>
+            )}
+            <span className="text-xs text-slate-400">{formatDistance(pro.distance, unit)} {t.distance}</span>
+          </div>
         </div>
       </div>
-      {pro.phone && (
-        <a href={`tel:${pro.phone}`}
-          className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-sky-600 bg-sky-50 hover:bg-sky-100 px-3 py-1.5 rounded-xl transition">
-          📞 {t.call}
-        </a>
-      )}
+
+      {/* Action button row */}
+      <div className="flex gap-2 pt-1 border-t border-slate-50">
+        {siteBooking ? (
+          <button
+            disabled
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-300 px-3 py-2 rounded-xl opacity-90 cursor-not-allowed"
+          >
+            💬 {t.openChat}
+          </button>
+        ) : busy ? (
+          <button
+            onClick={() => onOpenCalendar(pro._id)}
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-2 rounded-xl transition active:scale-95"
+          >
+            📅 {t.openCal}
+          </button>
+        ) : (
+          <button
+            disabled
+            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl opacity-70 cursor-not-allowed"
+          >
+            💬 {t.openChat}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -193,19 +238,23 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
             </p>
             <div className="flex flex-wrap gap-1.5">
               {site.tradesNeeded.map((tr) => {
-                const isSelected = selectedTrade === tr;
+                const isSelected  = selectedTrade === tr.name;
+                const isAssigned  = tr.assigned;
                 return (
                   <button
-                    key={tr}
+                    key={tr.name}
                     type="button"
-                    onClick={() => onSelectTrade(site._id, isSelected ? null : tr)}
+                    disabled={isAssigned}
+                    onClick={() => !isAssigned && onSelectTrade(site._id, isSelected ? null : tr.name)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold border-2 transition-all duration-150 active:scale-95 ${
-                      isSelected
-                        ? 'bg-orange-500 border-orange-500 text-white shadow shadow-orange-200'
-                        : 'bg-white border-amber-200 text-amber-700 hover:border-orange-300 hover:text-orange-600'
+                      isAssigned
+                        ? 'bg-orange-400 border-orange-400 text-white shadow shadow-orange-100 cursor-not-allowed opacity-90'
+                        : isSelected
+                          ? 'bg-orange-500 border-orange-500 text-white shadow shadow-orange-200'
+                          : 'bg-white border-amber-200 text-amber-700 hover:border-orange-300 hover:text-orange-600'
                     }`}
                   >
-                    {tr}
+                    {isAssigned ? `✓ ${tr.name}` : tr.name}
                   </button>
                 );
               })}
@@ -287,7 +336,7 @@ function DistancePanel({ unit, setUnit, distance, setDistance, t }) {
 }
 
 // ── Search results panel ─────────────────────────────────────────────────────
-function SearchResults({ search, unit, t, onClose }) {
+function SearchResults({ search, unit, t, onClose, onOpenCalendar }) {
   const tr = t.results;
 
   return (
@@ -319,7 +368,9 @@ function SearchResults({ search, unit, t, onClose }) {
         ) : (
           <div className="space-y-3">
             {search.results.map((pro) => (
-              <ProCard key={pro._id} pro={pro} unit={unit} t={tr} />
+              <ProCard key={pro._id} pro={pro} unit={unit} t={tr}
+                siteName={search.siteName}
+                onOpenCalendar={(id) => onOpenCalendar(id, search.siteName, search.siteAddress)} />
             ))}
           </div>
         )}
@@ -351,8 +402,9 @@ export default function ContractorDashboard() {
   const [search,       setSearch]       = useState(null);
   const [manageSite,   setManageSite]   = useState(null);
   const [photoSite,    setPhotoSite]    = useState(null);
+  const [calendarPro, setCalendarPro] = useState(null); // { proId, siteName }
   // Single selection across all cards: { siteId, trade } | null
-  const [selection,    setSelection]    = useState(null);
+  const [selection, setSelection] = useState(null);
 
   const handleSelectTrade = (siteId, trade) => {
     setSelection(trade ? { siteId, trade } : null);
@@ -364,7 +416,18 @@ export default function ContractorDashboard() {
   useEffect(() => {
     if (activeView === 'allSites') {
       setSitesLoading(true);
-      getSites().then(setSites).catch(console.error).finally(() => setSitesLoading(false));
+      getSites()
+        .then((loaded) => {
+          // Normalize tradesNeeded — handle old string[] format from DB
+          setSites(loaded.map((s) => ({
+            ...s,
+            tradesNeeded: (s.tradesNeeded || []).map((t) =>
+              typeof t === 'string' ? { name: t, assigned: false } : t
+            ),
+          })));
+        })
+        .catch(console.error)
+        .finally(() => setSitesLoading(false));
     }
   }, [activeView]);
 
@@ -384,12 +447,30 @@ export default function ContractorDashboard() {
 
   const handleFind = async (site, trade) => {
     setSelection(null);
-    setSearch({ siteName: site.name, trade, loading: true, results: [] });
-    // Scroll to results after render
+    setSearch({ siteName: site.name, siteAddress: site.address, trade, loading: true, results: [] });
     setTimeout(() => document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     try {
       const data = await findTradesForSite(site._id, trade, distance, unit);
-      setSearch({ siteName: site.name, trade, loading: false, results: data.results });
+      setSearch({ siteName: site.name, siteAddress: site.address, trade, loading: false, results: data.results });
+
+      // If any result has a confirmed booking for this site, flip that trade's assigned → true
+      const hasScheduled = data.results.some((pro) =>
+        pro.bookings?.some((b) => b.siteName === site.name)
+      );
+      if (hasScheduled) {
+        const alreadyMarked = site.tradesNeeded.find((t) => t.name === trade)?.assigned;
+        if (!alreadyMarked) {
+          const updatedTrades = site.tradesNeeded.map((t) =>
+            t.name === trade ? { ...t, assigned: true } : t
+          );
+          // Optimistic local update
+          setSites((prev) => prev.map((s) =>
+            s._id === site._id ? { ...s, tradesNeeded: updatedTrades } : s
+          ));
+          // Persist to MongoDB
+          updateSite(site._id, { tradesNeeded: updatedTrades }).catch(console.error);
+        }
+      }
     } catch (err) {
       const noLocation = err?.response?.status === 422;
       setSearch({ siteName: site.name, trade, loading: false, results: [], noLocation, error: !noLocation });
@@ -497,6 +578,7 @@ export default function ContractorDashboard() {
                       unit={unit}
                       t={t}
                       onClose={() => setSearch(null)}
+                      onOpenCalendar={(proId, siteName, siteAddress) => setCalendarPro({ proId, siteName, siteAddress })}
                     />
                   </div>
                 )}
@@ -528,6 +610,15 @@ export default function ContractorDashboard() {
           site={photoSite}
           onClose={() => setPhotoSite(null)}
           onUpdated={handleTradesUpdated}
+        />
+      )}
+      {calendarPro && (
+        <TradeCalendarModal
+          tradeId={calendarPro.proId}
+          siteName={calendarPro.siteName}
+          siteAddress={calendarPro.siteAddress}
+          mySiteNames={sites.map((s) => s.name)}
+          onClose={() => setCalendarPro(null)}
         />
       )}
     </div>

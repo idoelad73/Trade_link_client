@@ -13,7 +13,7 @@ const MONTHS = {
 
 const content = {
   en: {
-    legend:   { free: 'Available', busy: 'Busy', today: 'Today' },
+    legend:   { free: 'Available', busy: 'Off', booked: 'On Job', today: 'Today' },
     hint:     'Tap a day to toggle',
     save:     'Save Schedule',
     saving:   'Saving…',
@@ -24,7 +24,7 @@ const content = {
     within:   'within',
   },
   es: {
-    legend:   { free: 'Disponible', busy: 'Ocupado', today: 'Hoy' },
+    legend:   { free: 'Disponible', busy: 'Libre no', booked: 'En obra', today: 'Hoy' },
     hint:     'Toca un día para cambiar',
     save:     'Guardar Calendario',
     saving:   'Guardando…',
@@ -49,7 +49,7 @@ function buildCalendar(year, month) {
   return cells;
 }
 
-export default function TradeSchedule({ initialBusyDays = [] }) {
+export default function TradeSchedule({ initialBusyDays = [], initialBookings = [] }) {
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
 
@@ -57,7 +57,8 @@ export default function TradeSchedule({ initialBusyDays = [] }) {
   const [year,  setYear]  = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
-  const [busyDays, setBusyDays] = useState(() => new Set(initialBusyDays));
+  const [busyDays,   setBusyDays]   = useState(() => new Set(initialBusyDays));
+  const bookingMap = Object.fromEntries(initialBookings.map((b) => [b.date, b]));
   const [dirty,    setDirty]    = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [saved,    setSaved]    = useState(false);
@@ -105,9 +106,10 @@ export default function TradeSchedule({ initialBusyDays = [] }) {
           <button onClick={nextMonth} className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white font-bold transition">›</button>
         </div>
 
-        <div className="flex items-center gap-4 px-6 py-3 border-b border-sky-50 bg-sky-50/40">
+        <div className="flex items-center gap-3 px-6 py-3 border-b border-sky-50 bg-sky-50/40 flex-wrap">
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.free}</span></div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.busy}</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-300" /><span className="text-xs text-slate-500 font-medium">{t.legend.busy}</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-700" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full border-2 border-sky-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.today}</span></div>
           <span className="text-xs text-slate-400 ml-auto">{t.hint}</span>
         </div>
@@ -121,17 +123,36 @@ export default function TradeSchedule({ initialBusyDays = [] }) {
         <div className="grid grid-cols-7 gap-1 px-3 pb-4">
           {cells.map((day, i) => {
             if (!day) return <div key={`e-${i}`} />;
-            const key    = toDateKey(year, month, day);
-            const isBusy = busyDays.has(key);
+            const key     = toDateKey(year, month, day);
+            const booking = bookingMap[key];
+            const isOff   = busyDays.has(key);
             const isToday = key === todayKey;
+            // Booked days can't be toggled manually
             return (
-              <button key={key} onClick={() => toggleDay(day)}
-                className={`relative aspect-square rounded-xl text-sm font-semibold flex items-center justify-center transition-all duration-150 active:scale-90 select-none
-                  ${isBusy ? 'bg-red-500 text-white shadow-sm shadow-red-200 hover:bg-red-600' : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
-                  ${isToday ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}>
-                {day}
-                {isToday && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/80" />}
-              </button>
+              <div key={key} className="relative group">
+                <button
+                  onClick={() => !booking && toggleDay(day)}
+                  disabled={!!booking}
+                  className={`relative w-full aspect-square rounded-xl text-sm font-semibold flex items-center justify-center transition-all duration-150 active:scale-90 select-none
+                    ${booking
+                      ? 'bg-red-700 text-white shadow-sm shadow-red-300 cursor-default'
+                      : isOff
+                        ? 'bg-red-300 text-white shadow-sm shadow-red-100 hover:bg-red-400'
+                        : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
+                    ${isToday ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}
+                >
+                  {day}
+                  {booking && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/80" />}
+                  {isToday && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/80" />}
+                </button>
+                {booking && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-10 hidden group-hover:block w-44 bg-slate-800 text-white text-xs rounded-xl p-2.5 shadow-xl pointer-events-none">
+                    <p className="font-bold truncate">🏗️ {booking.siteName}</p>
+                    {booking.siteAddress && <p className="text-slate-300 mt-0.5 truncate">📍 {booking.siteAddress}</p>}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-slate-800" />
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
