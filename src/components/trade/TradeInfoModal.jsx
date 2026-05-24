@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getMe, updateMe } from '../../api/trade.js';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
@@ -15,6 +15,8 @@ const content = {
       phone:     'Phone',
       trade:     'Trade',
       address:   'Address',
+      photo:     'Profile Photo',
+      photoHint: 'Click to change photo',
       docs:      'Documents',
       license:   'License',
       insurance: 'Insurance',
@@ -38,6 +40,8 @@ const content = {
       phone:     'Teléfono',
       trade:     'Oficio',
       address:   'Dirección',
+      photo:     'Foto de Perfil',
+      photoHint: 'Clic para cambiar foto',
       docs:      'Documentos',
       license:   'Licencia',
       insurance: 'Seguro',
@@ -71,12 +75,15 @@ export default function TradeInfoModal({ onClose }) {
   const lang    = useUIStore((s) => s.lang);
   const t       = content[lang];
 
-  const [trade,   setTrade]   = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [mode,    setMode]    = useState('view');
-  const [form,    setForm]    = useState({});
-  const [saving,  setSaving]  = useState(false);
-  const [error,   setError]   = useState('');
+  const [trade,        setTrade]        = useState(null);
+  const [loading,      setLoading]      = useState(true);
+  const [mode,         setMode]         = useState('view');
+  const [form,         setForm]         = useState({});
+  const [photoFile,    setPhotoFile]    = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [saving,       setSaving]       = useState(false);
+  const [error,        setError]        = useState('');
+  const photoInputRef = useRef();
 
   useEffect(() => {
     getMe()
@@ -86,6 +93,13 @@ export default function TradeInfoModal({ onClose }) {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+  };
 
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose(); };
@@ -97,9 +111,19 @@ export default function TradeInfoModal({ onClose }) {
     setError('');
     setSaving(true);
     try {
-      const updated = await updateMe(form);
+      let payload;
+      if (photoFile) {
+        payload = new FormData();
+        Object.entries(form).forEach(([k, v]) => payload.append(k, v));
+        payload.append('photo', photoFile);
+      } else {
+        payload = form;
+      }
+      const updated = await updateMe(payload);
       setTrade(updated);
       setUser({ ...user, fullName: updated.fullName });
+      setPhotoFile(null);
+      setPhotoPreview(null);
       setMode('view');
     } catch {
       setError(t.error);
@@ -169,6 +193,32 @@ export default function TradeInfoModal({ onClose }) {
             </div>
           ) : (
             <div className="space-y-4">
+
+              {/* Photo upload */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">{t.labels.photo}</label>
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-sky-100 flex-shrink-0 bg-sky-50 flex items-center justify-center">
+                    {photoPreview || trade?.photo
+                      ? <img src={photoPreview || trade.photo} alt="preview" className="w-full h-full object-cover" />
+                      : <span className="text-2xl">👤</span>
+                    }
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current.click()}
+                    className="flex-1 rounded-xl border-2 border-dashed border-sky-200 hover:border-sky-400 bg-sky-50/50 px-4 py-3 text-sm text-sky-500 font-medium transition flex items-center gap-2"
+                  >
+                    <span>📷</span>
+                    <span className="truncate text-left">
+                      {photoFile ? photoFile.name : <span className="text-slate-400">{t.labels.photoHint}</span>}
+                    </span>
+                    {photoFile && <span className="text-green-500 ml-auto">✓</span>}
+                  </button>
+                  <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.name}</label>
                 <input className={inputCls} value={form.fullName} onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))} />

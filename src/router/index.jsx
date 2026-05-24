@@ -21,6 +21,8 @@ import TradeRegister from '../pages/register/TradeRegister';
 import ContractorRegister from '../pages/register/ContractorRegister';
 import ContractorDashboard from '../pages/dashboard/ContractorDashboard';
 import TradeDashboard from '../pages/dashboard/TradeDashboard';
+import ProjectsShowcase from '../pages/ProjectsShowcase';
+import TradesShowcase from '../pages/TradesShowcase';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -28,6 +30,8 @@ const router = createBrowserRouter(
       {/* Public */}
       <Route path="/" element={<PonsLanding />} />
       <Route path="/register" element={<RegistrationArea />} />
+      <Route path="/projects" element={<ProjectsShowcase />} />
+      <Route path="/trades"   element={<TradesShowcase />} />
       <Route path="/register/trade" element={<TradeRegister />} />
       <Route path="/register/contractor" element={<ContractorRegister />} />
 

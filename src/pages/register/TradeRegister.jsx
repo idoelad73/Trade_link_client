@@ -24,6 +24,7 @@ const content = {
       phone: 'Phone Number',
       professionality: 'Select your trade',
       address: 'Office / Business Address',
+      hourlyRate: 'Hourly Rate (optional)',
       photo: 'Profile Photo',
       licenseDoc: 'Trade License',
       insuranceDoc: 'Insurance Certificate',
@@ -70,6 +71,7 @@ const content = {
       phone: 'Número de Teléfono',
       professionality: 'Selecciona tu oficio',
       address: 'Dirección de Oficina / Negocio',
+      hourlyRate: 'Tarifa por Hora (opcional)',
       photo: 'Foto de Perfil',
       licenseDoc: 'Licencia Comercial',
       insuranceDoc: 'Certificado de Seguro',
@@ -153,7 +155,7 @@ export default function TradeRegister() {
 
   const [form, setForm] = useState({
     fullName: '', email: '', password: '', confirmPassword: '',
-    phone: '', professionality: '', address: '',
+    phone: '', professionality: '', address: '', hourlyRate: '',
     locationConsent: false, latitude: null, longitude: null,
   });
   const [files, setFiles] = useState({
@@ -382,6 +384,22 @@ export default function TradeRegister() {
           <div>
             <label className={labelCls}>{t.fields.address}</label>
             <input className={inputCls} required value={form.address} onChange={set('address')} placeholder={t.placeholders.address} />
+          </div>
+
+          <div>
+            <label className={labelCls}>{t.fields.hourlyRate}</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-sm">$</span>
+              <input
+                className={inputCls + ' pl-8'}
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.hourlyRate}
+                onChange={set('hourlyRate')}
+                placeholder="0.00"
+              />
+            </div>
           </div>
 
           {/* ── Documents ── */}

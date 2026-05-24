@@ -60,34 +60,40 @@ export default function RegistrationArea() {
         <div className="flex flex-col sm:flex-row gap-6 w-full max-w-2xl">
 
           {/* Contractors */}
-          <button
-            onClick={() => navigate('/register/contractor')}
-            className="flex-1 group bg-white/80 backdrop-blur-sm border-2 border-sky-200 hover:border-sky-400 rounded-3xl p-8 text-left shadow-md hover:shadow-xl transition-all duration-200 active:scale-95"
+          <div
+            onClick={() => navigate('/trades')}
+            className="flex-1 group bg-white/80 backdrop-blur-sm border-2 border-sky-200 hover:border-sky-400 rounded-3xl p-8 text-left shadow-md hover:shadow-xl transition-all duration-200 active:scale-95 cursor-pointer"
           >
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-400 to-sky-300 flex items-center justify-center text-2xl mb-5 shadow group-hover:scale-110 transition-transform">
               🏗️
             </div>
             <h2 className="text-xl font-bold text-slate-800 mb-2">{t.contractorLabel}</h2>
             <p className="text-sm text-slate-500 leading-relaxed">{t.contractorDesc}</p>
-            <div className="mt-5 inline-flex items-center gap-2 text-sky-500 font-semibold text-sm">
+            <button
+              onClick={(e) => { e.stopPropagation(); navigate('/register/contractor'); }}
+              className="mt-5 inline-flex items-center gap-2 text-sky-500 font-semibold text-sm hover:text-sky-600 transition-colors"
+            >
               Get started <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
-            </div>
-          </button>
+            </button>
+          </div>
 
           {/* Professional Trade */}
-          <button
-            onClick={() => navigate('/register/trade')}
-            className="flex-1 group bg-white/80 backdrop-blur-sm border-2 border-amber-200 hover:border-amber-400 rounded-3xl p-8 text-left shadow-md hover:shadow-xl transition-all duration-200 active:scale-95"
+          <div
+            onClick={() => navigate('/projects')}
+            className="flex-1 group bg-white/80 backdrop-blur-sm border-2 border-amber-200 hover:border-amber-400 rounded-3xl p-8 text-left shadow-md hover:shadow-xl transition-all duration-200 active:scale-95 cursor-pointer"
           >
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-300 flex items-center justify-center text-2xl mb-5 shadow group-hover:scale-110 transition-transform">
               🔧
             </div>
             <h2 className="text-xl font-bold text-slate-800 mb-2">{t.tradeLabel}</h2>
             <p className="text-sm text-slate-500 leading-relaxed">{t.tradeDesc}</p>
-            <div className="mt-5 inline-flex items-center gap-2 text-amber-500 font-semibold text-sm">
+            <button
+              onClick={(e) => { e.stopPropagation(); navigate('/register/trade'); }}
+              className="mt-5 inline-flex items-center gap-2 text-amber-500 font-semibold text-sm hover:text-amber-600 transition-colors"
+            >
               Get started <span className="group-hover:translate-x-1 transition-transform inline-block">→</span>
-            </div>
-          </button>
+            </button>
+          </div>
 
         </div>
       </section>
