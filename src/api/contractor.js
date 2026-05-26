@@ -12,8 +12,8 @@ export const updateSite  = (id, form) => api.patch(`/contractor/sites/${id}`, fo
 export const deleteSite  = (id)    => api.delete(`/contractor/sites/${id}`).then(r => r.data);
 
 // Trade search
-export const findTradesForSite = (siteId, trade, distance, unit) =>
-  api.get(`/contractor/sites/${siteId}/find-trades`, { params: { trade, distance, unit } })
+export const findTradesForSite = (siteId, trade, distance, unit, maxRate) =>
+  api.get(`/contractor/sites/${siteId}/find-trades`, { params: { trade, distance, unit, ...(maxRate ? { maxRate } : {}) } })
      .then(r => r.data);
 
 // Trade pro calendar (busy days)
@@ -21,5 +21,5 @@ export const getTradeBusyDays = (tradeId) =>
   api.get(`/contractor/trade-pros/${tradeId}/busy-days`).then(r => r.data.pro);
 
 // Ask trade pro for availability on a specific date
-export const askAvailability = (tradeId, date, siteName, siteAddress, lang) =>
-  api.post(`/contractor/trade-pros/${tradeId}/ask-availability`, { date, siteName, siteAddress, lang }).then(r => r.data);
+export const askAvailability = (tradeId, date, siteName, siteAddress, lang, siteId) =>
+  api.post(`/contractor/trade-pros/${tradeId}/ask-availability`, { date, siteName, siteAddress, lang, siteId }).then(r => r.data);

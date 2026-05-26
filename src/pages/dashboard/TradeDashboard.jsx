@@ -5,6 +5,7 @@ import useUIStore from '../../stores/uiStore.js';
 import { getMe, updateLocation } from '../../api/trade.js';
 import TradeInfoModal from '../../components/trade/TradeInfoModal.jsx';
 import TradeSchedule from '../../components/trade/TradeSchedule.jsx';
+import AvailabilityMessagesModal from '../../components/trade/AvailabilityMessagesModal.jsx';
 
 const content = {
   en: {
@@ -38,10 +39,11 @@ export default function TradeDashboard() {
     { id: 'schedule', label: t.tabs.schedule, icon: '📅', modal: false },
   ];
 
-  const [activeView,  setActiveView]  = useState('schedule');
-  const [modalOpen,   setModalOpen]   = useState(false);
-  const [tradeData,   setTradeData]   = useState(null);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [activeView,    setActiveView]    = useState('schedule');
+  const [modalOpen,     setModalOpen]     = useState(false);
+  const [messagesOpen,  setMessagesOpen]  = useState(false);
+  const [tradeData,     setTradeData]     = useState(null);
+  const [dataLoading,   setDataLoading]   = useState(true);
 
   useEffect(() => {
     getMe().then(setTradeData).catch(console.error).finally(() => setDataLoading(false));
@@ -105,9 +107,32 @@ export default function TradeDashboard() {
               <p className="text-xs font-bold text-slate-700 leading-none">{user?.fullName}</p>
               <p className="text-xs text-slate-400 mt-0.5">{t.role}</p>
             </div>
-            {tradeData?.photo && (
-              <img src={tradeData.photo} alt={user?.fullName} className="w-8 h-8 rounded-xl object-cover border-2 border-sky-100 hidden sm:block" />
-            )}
+
+            {/* Photo + availability messages badge */}
+            <button
+              onClick={() => setMessagesOpen(true)}
+              className="hidden sm:flex items-center gap-2 rounded-xl hover:bg-amber-50 px-2 py-1 transition group"
+              title="Availability Messages"
+            >
+              <div className="relative">
+                {tradeData?.photo
+                  ? <img src={tradeData.photo} alt={user?.fullName} className="w-9 h-9 rounded-xl object-cover object-top border-2 border-sky-100" />
+                  : <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-100 to-amber-100 flex items-center justify-center text-base">🔧</div>
+                }
+                {tradeData?.availabilityMessages > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow border-2 border-white leading-none">
+                    {tradeData.availabilityMessages > 99 ? '99+' : tradeData.availabilityMessages}
+                  </span>
+                )}
+              </div>
+              {tradeData?.availabilityMessages > 0 && (
+                <div className="flex flex-col leading-tight text-left">
+                  <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Availability</span>
+                  <span className="text-xs font-extrabold text-amber-500 group-hover:text-amber-600">{tradeData.availabilityMessages} message{tradeData.availabilityMessages !== 1 ? 's' : ''}</span>
+                </div>
+              )}
+            </button>
+
             <button
               onClick={() => { clearAuth(); navigate('/'); }}
               className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl transition"
@@ -139,7 +164,13 @@ export default function TradeDashboard() {
         )}
       </main>
 
-      {modalOpen && <TradeInfoModal onClose={() => setModalOpen(false)} />}
+      {modalOpen      && <TradeInfoModal onClose={() => setModalOpen(false)} />}
+      {messagesOpen   && (
+        <AvailabilityMessagesModal
+          onClose={() => setMessagesOpen(false)}
+          onApproved={() => getMe().then(setTradeData).catch(console.error)}
+        />
+      )}
     </div>
   );
 }

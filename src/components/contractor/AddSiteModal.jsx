@@ -27,6 +27,16 @@ const content = {
       trades:  'Please select at least one trade needed.',
       server:  'Failed to create project. Please try again.',
     },
+    budget: {
+      title:      'Set Budget for',
+      typeAmount: '💰 Total Amount',
+      typeHours:  '⏱️ Total Hours',
+      amountHint: 'Max amount ($)',
+      hoursHint:  'Total hours',
+      add:        'Add Trade',
+      skip:       'Skip',
+      cancel:     'Cancel',
+    },
   },
   es: {
     badge:   '🏗️ Nuevo Proyecto',
@@ -51,33 +61,82 @@ const content = {
       trades:  'Selecciona al menos un oficio necesario.',
       server:  'Error al crear el proyecto. Inténtalo de nuevo.',
     },
+    budget: {
+      title:      'Establecer Presupuesto para',
+      typeAmount: '💰 Monto Total',
+      typeHours:  '⏱️ Horas Totales',
+      amountHint: 'Monto máximo ($)',
+      hoursHint:  'Total de horas',
+      add:        'Agregar Oficio',
+      skip:       'Omitir',
+      cancel:     'Cancelar',
+    },
   },
 };
 
 const inputCls =
   'w-full rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-300 transition';
 
+function BudgetBadge({ trade }) {
+  if (trade.budgetType === 'amount' && trade.maxAmount)
+    return <span className="ml-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-1 py-0.5 rounded">${trade.maxAmount}</span>;
+  if (trade.budgetType === 'hours' && trade.totalHours)
+    return <span className="ml-1 text-[10px] font-bold text-violet-600 bg-violet-50 border border-violet-200 px-1 py-0.5 rounded">{trade.totalHours}h</span>;
+  return null;
+}
+
 export default function AddSiteModal({ onClose, onCreated }) {
   const lang = useUIStore((s) => s.lang);
   const t = content[lang];
+  const tb = t.budget;
 
   const photoInputRef = useRef();
   const [form,         setForm]         = useState({ name: '', type: '', address: '' });
-  const [trades,       setTrades]       = useState([]);
+  const [trades,       setTrades]       = useState([]); // [{name, assigned, budgetType, maxAmount, totalHours}]
   const [photoFile,    setPhotoFile]    = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState('');
 
+  // budget mini-modal
+  const [pendingTrade, setPendingTrade] = useState(null);
+  const [budgetType,   setBudgetType]   = useState('amount');
+  const [budgetValue,  setBudgetValue]  = useState('');
+
   useEffect(() => {
-    const h = (e) => { if (e.key === 'Escape') onClose(); };
+    const h = (e) => {
+      if (e.key === 'Escape') { if (pendingTrade) setPendingTrade(null); else onClose(); }
+    };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [onClose]);
+  }, [onClose, pendingTrade]);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-  const toggleTrade = (item) =>
-    setTrades((prev) => prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]);
+
+  const handleTradeClick = (name) => {
+    const exists = trades.some((x) => x.name === name);
+    if (exists) {
+      setTrades((prev) => prev.filter((x) => x.name !== name));
+    } else {
+      setPendingTrade(name);
+      setBudgetType('amount');
+      setBudgetValue('');
+    }
+  };
+
+  const confirmAdd = (skip = false) => {
+    const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null };
+    if (!skip && budgetValue) {
+      const num = parseFloat(budgetValue);
+      if (!isNaN(num) && num > 0) {
+        entry.budgetType = budgetType;
+        if (budgetType === 'amount') entry.maxAmount  = num;
+        else                         entry.totalHours = num;
+      }
+    }
+    setTrades((prev) => [...prev, entry]);
+    setPendingTrade(null);
+  };
 
   const handlePhoto = (e) => {
     const file = e.target.files?.[0];
@@ -113,90 +172,150 @@ export default function AddSiteModal({ onClose, onCreated }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+        onClick={(e) => e.target === e.currentTarget && !pendingTrade && onClose()}>
+        <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
 
-        <div className="h-1.5 w-full bg-gradient-to-r from-sky-400 to-amber-400 flex-shrink-0" />
+          <div className="h-1.5 w-full bg-gradient-to-r from-sky-400 to-amber-400 flex-shrink-0" />
 
-        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0">
-          <div>
-            <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-sky-100 text-sky-700 border border-sky-200 mb-2">{t.badge}</div>
-            <h2 className="text-xl font-extrabold text-slate-800">{t.title}</h2>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 transition text-lg">×</button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="overflow-y-auto px-8 py-6 flex-1 space-y-5">
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.name} <span className="text-red-400">{t.labels.required}</span></label>
-            <input className={inputCls} value={form.name} onChange={set('name')} placeholder="Downtown Office Renovation" />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.type} <span className="text-red-400">{t.labels.required}</span></label>
-            <div className="flex gap-3">
-              {['residential', 'commercial'].map((tp) => (
-                <button key={tp} type="button" onClick={() => setForm((f) => ({ ...f, type: tp }))}
-                  className={`flex-1 py-3 rounded-2xl text-sm font-semibold border-2 capitalize transition-all duration-150 ${form.type === tp ? 'bg-amber-500 border-amber-500 text-white shadow' : 'bg-white border-amber-200 text-amber-700 hover:border-amber-400'}`}>
-                  {t.types[tp]}
-                </button>
-              ))}
+          <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0">
+            <div>
+              <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-sky-100 text-sky-700 border border-sky-200 mb-2">{t.badge}</div>
+              <h2 className="text-xl font-extrabold text-slate-800">{t.title}</h2>
             </div>
+            <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 transition text-lg">×</button>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.address} <span className="text-red-400">{t.labels.required}</span></label>
-            <input className={inputCls} value={form.address} onChange={set('address')} placeholder="456 Oak Ave, Los Angeles, CA 90001" />
-          </div>
+          <form onSubmit={handleSubmit} className="overflow-y-auto px-8 py-6 flex-1 space-y-5">
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.trades} <span className="text-red-400">{t.labels.required}</span></label>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {TRADE_PROFESSIONALITIES.map((item) => {
-                const active = trades.includes(item);
-                return (
-                  <button key={item} type="button" onClick={() => toggleTrade(item)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all duration-150 ${active ? 'bg-sky-500 border-sky-500 text-white' : 'bg-white border-sky-200 text-sky-700 hover:border-sky-400'}`}>
-                    {active && <span className="mr-1">✓</span>}{item}
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.name} <span className="text-red-400">{t.labels.required}</span></label>
+              <input className={inputCls} value={form.name} onChange={set('name')} placeholder="Downtown Office Renovation" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.type} <span className="text-red-400">{t.labels.required}</span></label>
+              <div className="flex gap-3">
+                {['residential', 'commercial'].map((tp) => (
+                  <button key={tp} type="button" onClick={() => setForm((f) => ({ ...f, type: tp }))}
+                    className={`flex-1 py-3 rounded-2xl text-sm font-semibold border-2 capitalize transition-all duration-150 ${form.type === tp ? 'bg-amber-500 border-amber-500 text-white shadow' : 'bg-white border-amber-200 text-amber-700 hover:border-amber-400'}`}>
+                    {t.types[tp]}
                   </button>
-                );
-              })}
-            </div>
-            {trades.length > 0 && <p className="text-xs text-sky-600 font-medium mt-2">{t.selected(trades.length)}</p>}
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
-              {t.labels.photo} <span className="text-slate-400 normal-case font-normal">{t.labels.optional}</span>
-            </label>
-            {photoPreview ? (
-              <div className="relative rounded-2xl overflow-hidden border border-amber-100 shadow-sm">
-                <img src={photoPreview} alt="Site preview" className="w-full h-40 object-cover" />
-                <button type="button" onClick={() => { setPhotoFile(null); setPhotoPreview(null); photoInputRef.current.value = ''; }}
-                  className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white text-sm flex items-center justify-center hover:bg-black/70 transition">×</button>
+                ))}
               </div>
-            ) : (
-              <button type="button" onClick={() => photoInputRef.current.click()}
-                className="w-full border-2 border-dashed border-amber-200 rounded-2xl py-8 text-center text-sm text-amber-600 hover:border-amber-400 hover:bg-amber-50 transition-all">
-                <span className="text-2xl block mb-1">📷</span>{t.photoHint}
-              </button>
-            )}
-            <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.address} <span className="text-red-400">{t.labels.required}</span></label>
+              <input className={inputCls} value={form.address} onChange={set('address')} placeholder="456 Oak Ave, Los Angeles, CA 90001" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.trades} <span className="text-red-400">{t.labels.required}</span></label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {TRADE_PROFESSIONALITIES.map((item) => {
+                  const tradeObj = trades.find((x) => x.name === item);
+                  const active   = !!tradeObj;
+                  return (
+                    <button key={item} type="button" onClick={() => handleTradeClick(item)}
+                      className={`inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold border-2 transition-all duration-150 ${active ? 'bg-sky-500 border-sky-500 text-white' : 'bg-white border-sky-200 text-sky-700 hover:border-sky-400'}`}>
+                      {active && <span className="mr-1">✓</span>}
+                      {item}
+                      {tradeObj && <BudgetBadge trade={tradeObj} />}
+                    </button>
+                  );
+                })}
+              </div>
+              {trades.length > 0 && <p className="text-xs text-sky-600 font-medium mt-2">{t.selected(trades.length)}</p>}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
+                {t.labels.photo} <span className="text-slate-400 normal-case font-normal">{t.labels.optional}</span>
+              </label>
+              {photoPreview ? (
+                <div className="relative rounded-2xl overflow-hidden border border-amber-100 shadow-sm">
+                  <img src={photoPreview} alt="Site preview" className="w-full h-40 object-cover" />
+                  <button type="button" onClick={() => { setPhotoFile(null); setPhotoPreview(null); photoInputRef.current.value = ''; }}
+                    className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white text-sm flex items-center justify-center hover:bg-black/70 transition">×</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => photoInputRef.current.click()}
+                  className="w-full border-2 border-dashed border-amber-200 rounded-2xl py-8 text-center text-sm text-amber-600 hover:border-amber-400 hover:bg-amber-50 transition-all">
+                  <span className="text-2xl block mb-1">📷</span>{t.photoHint}
+                </button>
+              )}
+              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+            </div>
+
+            {error && <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">{error}</div>}
+          </form>
+
+          <div className="px-8 py-5 border-t border-slate-100 flex gap-3 flex-shrink-0">
+            <button onClick={handleSubmit} disabled={loading}
+              className="flex-1 bg-gradient-to-r from-amber-500 to-sky-400 hover:from-amber-400 disabled:opacity-60 text-white font-semibold py-3 rounded-2xl shadow shadow-amber-200 transition-all active:scale-[0.99] text-sm">
+              {loading ? t.btn.creating : t.btn.create}
+            </button>
+            <button onClick={onClose} className="px-6 py-3 rounded-2xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition">{t.btn.cancel}</button>
           </div>
-
-          {error && <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">{error}</div>}
-        </form>
-
-        <div className="px-8 py-5 border-t border-slate-100 flex gap-3 flex-shrink-0">
-          <button onClick={handleSubmit} disabled={loading}
-            className="flex-1 bg-gradient-to-r from-amber-500 to-sky-400 hover:from-amber-400 disabled:opacity-60 text-white font-semibold py-3 rounded-2xl shadow shadow-amber-200 transition-all active:scale-[0.99] text-sm">
-            {loading ? t.btn.creating : t.btn.create}
-          </button>
-          <button onClick={onClose} className="px-6 py-3 rounded-2xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition">{t.btn.cancel}</button>
         </div>
       </div>
-    </div>
+
+      {/* ── Budget mini-modal ────────────────────────────────── */}
+      {pendingTrade && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-[2px]">
+          <div className="w-full max-w-xs bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100">
+
+            <div className="h-1 w-full bg-gradient-to-r from-emerald-400 to-violet-400" />
+
+            <div className="px-6 pt-5 pb-2">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">{tb.title}</p>
+              <p className="text-base font-extrabold text-slate-800 mb-4">{pendingTrade}</p>
+
+              <div className="flex gap-2 mb-4">
+                <button type="button" onClick={() => setBudgetType('amount')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 transition ${budgetType === 'amount' ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-white border-slate-200 text-slate-500 hover:border-emerald-300'}`}>
+                  {tb.typeAmount}
+                </button>
+                <button type="button" onClick={() => setBudgetType('hours')}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 transition ${budgetType === 'hours' ? 'bg-violet-50 border-violet-400 text-violet-700' : 'bg-white border-slate-200 text-slate-500 hover:border-violet-300'}`}>
+                  {tb.typeHours}
+                </button>
+              </div>
+
+              <div className="relative mb-5">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">
+                  {budgetType === 'amount' ? '$' : '⏱'}
+                </span>
+                <input
+                  type="number" min="0" step={budgetType === 'amount' ? '0.01' : '1'}
+                  value={budgetValue} onChange={(e) => setBudgetValue(e.target.value)}
+                  placeholder={budgetType === 'amount' ? tb.amountHint : tb.hoursHint}
+                  className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-300 transition"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmAdd(); } }}
+                />
+              </div>
+            </div>
+
+            <div className="px-6 pb-5 flex gap-2">
+              <button type="button" onClick={() => confirmAdd(false)}
+                className="flex-1 bg-gradient-to-r from-sky-500 to-sky-400 hover:from-sky-400 text-white font-semibold py-2.5 rounded-xl text-sm shadow shadow-sky-200 transition-all active:scale-[0.98]">
+                {tb.add}
+              </button>
+              <button type="button" onClick={() => confirmAdd(true)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition" title="Add without budget">
+                {tb.skip}
+              </button>
+              <button type="button" onClick={() => setPendingTrade(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition">
+                {tb.cancel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

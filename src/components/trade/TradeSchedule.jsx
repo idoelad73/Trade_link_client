@@ -146,9 +146,10 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                   {isToday && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/80" />}
                 </button>
                 {booking && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-10 hidden group-hover:block w-44 bg-slate-800 text-white text-xs rounded-xl p-2.5 shadow-xl pointer-events-none">
-                    <p className="font-bold truncate">🏗️ {booking.siteName}</p>
-                    {booking.siteAddress && <p className="text-slate-300 mt-0.5 truncate">📍 {booking.siteAddress}</p>}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-10 hidden group-hover:block w-64 bg-slate-800 text-white text-xs rounded-xl px-3 py-2 shadow-xl pointer-events-none">
+                    <p className="font-semibold truncate whitespace-nowrap">
+                      🏗️ {booking.siteName}{booking.siteAddress && <span className="text-slate-300 ml-1.5">📍 {booking.siteAddress}</span>}
+                    </p>
                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-slate-800" />
                   </div>
                 )}

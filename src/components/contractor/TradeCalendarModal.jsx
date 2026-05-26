@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getTradeBusyDays, askAvailability } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
+import { toast } from 'sonner';
 
 const DAYS = {
   en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
@@ -24,6 +25,13 @@ const content = {
     loading:    'Loading calendar…',
     error:      'Failed to load calendar.',
     sendError:  'Failed to send. Please try again.',
+    confirm: {
+      title:    'Send Availability Request?',
+      body:     (date) => `You're about to send a request to this professional for:`,
+      approve:  'Send Request',
+      cancel:   'Cancel',
+    },
+    toast:      (name) => `✅ Availability request sent to ${name}`,
   },
   es: {
     badge:      '📅 Calendario de Disponibilidad',
@@ -37,6 +45,13 @@ const content = {
     loading:    'Cargando calendario…',
     error:      'Error al cargar el calendario.',
     sendError:  'Error al enviar. Inténtalo de nuevo.',
+    confirm: {
+      title:    '¿Enviar solicitud de disponibilidad?',
+      body:     (date) => `Estás a punto de enviar una solicitud para:`,
+      approve:  'Enviar Solicitud',
+      cancel:   'Cancelar',
+    },
+    toast:      (name) => `✅ Solicitud enviada a ${name}`,
   },
 };
 
@@ -59,7 +74,7 @@ function formatDisplay(dateKey, lang) {
   });
 }
 
-export default function TradeCalendarModal({ tradeId, siteName, siteAddress, mySiteNames = [], onClose }) {
+export default function TradeCalendarModal({ tradeId, siteName, siteAddress, siteId, mySiteNames = [], onClose }) {
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
 
@@ -72,9 +87,11 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, myS
   const [loading,     setLoading]     = useState(true);
   const [fetchError,  setFetchError]  = useState(false);
   const [selectedKey, setSelectedKey] = useState(null);
-  const [sending,     setSending]     = useState(false);
-  const [sent,        setSent]        = useState(false);
-  const [sendError,   setSendError]   = useState('');
+  const [sending,       setSending]       = useState(false);
+  const [sent,          setSent]          = useState(false);
+  const [sendError,     setSendError]     = useState('');
+  const [confirmOpen,   setConfirmOpen]   = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState(null); // { proName, proProfessionality, proPhoto }
 
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose(); };
@@ -102,27 +119,40 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, myS
     setSelectedKey((prev) => prev === key ? null : key);
     setSent(false);
     setSendError('');
+    setDuplicateInfo(null);
   };
 
-  const handleAsk = async () => {
+  const handleAsk = () => {
     if (!selectedKey || sending || sent) return;
+    setConfirmOpen(true);
+  };
+
+  const handleConfirm = async () => {
+    setConfirmOpen(false);
     setSendError('');
+    setDuplicateInfo(null);
     setSending(true);
     try {
-      await askAvailability(tradeId, selectedKey, siteName, siteAddress, lang);
+      await askAvailability(tradeId, selectedKey, siteName, siteAddress, lang, siteId);
       setSent(true);
-      setTimeout(onClose, 2000);
-    } catch {
-      setSendError(t.sendError);
+      toast.success(t.toast(pro?.fullName ?? ''), { duration: 5000 });
+      setTimeout(onClose, 800);
+    } catch (err) {
+      if (err?.response?.status === 409 && err.response.data?.duplicate) {
+        setDuplicateInfo(err.response.data);
+      } else {
+        setSendError(t.sendError);
+      }
     } finally {
       setSending(false);
     }
   };
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onClick={(e) => e.target === e.currentTarget && !confirmOpen && onClose()}
     >
       <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col">
 
@@ -239,6 +269,21 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, myS
                   <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 text-sm text-red-600">{sendError}</div>
                 )}
 
+                {duplicateInfo && (
+                  <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 flex items-center gap-3">
+                    {duplicateInfo.proPhoto ? (
+                      <img src={duplicateInfo.proPhoto} alt={duplicateInfo.proName} className="w-8 h-8 rounded-lg object-cover flex-shrink-0 border border-amber-200" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-base flex-shrink-0">🔧</div>
+                    )}
+                    <p className="text-xs font-semibold text-amber-700 leading-snug">
+                      ⚠️ Already sent a request to <span className="font-extrabold">{duplicateInfo.proName}</span>
+                      {duplicateInfo.proProfessionality && <> · <span className="text-amber-600">{duplicateInfo.proProfessionality}</span></>}
+                      {' '}for this date
+                    </p>
+                  </div>
+                )}
+
                 <button
                   onClick={handleAsk}
                   disabled={!selectedKey || sending || sent}
@@ -262,5 +307,42 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, myS
         </div>
       </div>
     </div>
+
+    {/* ── Confirmation mini-modal ─────────────────────────────── */}
+    {confirmOpen && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-[2px]">
+        <div className="w-full max-w-xs bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+
+          <div className="h-1 w-full bg-gradient-to-r from-sky-400 to-emerald-400" />
+
+          <div className="px-6 pt-6 pb-2 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-2xl mx-auto mb-3">📅</div>
+            <h3 className="text-base font-extrabold text-slate-800 mb-1">{t.confirm.title}</h3>
+            <p className="text-xs text-slate-400 mb-4">{t.confirm.body()}</p>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
+              <p className="text-sm font-bold text-amber-700">
+                {selectedKey && formatDisplay(selectedKey, lang)}
+              </p>
+            </div>
+          </div>
+
+          <div className="px-6 pb-6 flex gap-2">
+            <button
+              onClick={handleConfirm}
+              className="flex-1 bg-gradient-to-r from-sky-500 to-sky-400 hover:from-sky-400 text-white font-bold py-2.5 rounded-xl text-sm shadow shadow-sky-200 transition-all active:scale-[0.98]"
+            >
+              {t.confirm.approve}
+            </button>
+            <button
+              onClick={() => setConfirmOpen(false)}
+              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition"
+            >
+              {t.confirm.cancel}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

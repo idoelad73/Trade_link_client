@@ -101,8 +101,8 @@ function isBusyToday(busyDays = []) {
 }
 
 // ── Professional result card ─────────────────────────────────────────────────
-function ProCard({ pro, unit, t, siteName, onOpenCalendar }) {
-  const busy = isBusyToday(pro.busyDays);
+function ProCard({ pro, unit, t, siteName, tradeEntry = {}, onOpenCalendar }) {
+  const busy        = isBusyToday(pro.busyDays);
   const siteBooking = pro.bookings?.find((b) => b.siteName === siteName);
 
   const formatBookingDate = (dateKey) =>
@@ -115,58 +115,68 @@ function ProCard({ pro, unit, t, siteName, onOpenCalendar }) {
       : 'border-emerald-100';
 
   return (
-    <div className={`bg-white rounded-2xl border shadow-sm p-4 flex flex-col gap-3 transition-all ${borderClass}`}>
-      {/* Top row: avatar + info */}
-      <div className="flex items-center gap-3">
-        <div className="flex-shrink-0">
-          {pro.photo
-            ? <img src={pro.photo} alt={pro.fullName} className="w-12 h-12 rounded-xl object-cover border border-slate-100" />
-            : <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-100 to-amber-100 flex items-center justify-center text-xl">🔧</div>
-          }
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-bold text-slate-800 text-sm truncate">{pro.fullName}</p>
-          <p className="text-xs text-slate-400 truncate">📍 {pro.address}</p>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            {siteBooking ? (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200 flex items-center gap-1 flex-wrap leading-snug">
-                ✅ {t.scheduled} · {siteBooking.siteName} · {formatBookingDate(siteBooking.date)}
-              </span>
-            ) : (
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${busy ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-                {busy ? t.busy : t.available}
-              </span>
-            )}
-            <span className="text-xs text-slate-400">{formatDistance(pro.distance, unit)} {t.distance}</span>
-          </div>
-        </div>
+    <div className={`bg-white rounded-2xl border shadow-sm px-4 py-3 flex items-center gap-3 transition-all ${borderClass}`}>
+
+      {/* Avatar */}
+      <div className="flex-shrink-0">
+        {pro.photo
+          ? <img src={pro.photo} alt={pro.fullName} className="w-10 h-10 rounded-xl object-cover object-top border border-slate-100" />
+          : <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-100 to-amber-100 flex items-center justify-center text-lg">🔧</div>
+        }
       </div>
 
-      {/* Action button row */}
-      <div className="flex gap-2 pt-1 border-t border-slate-50">
-        {siteBooking ? (
-          <button
-            disabled
-            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-300 px-3 py-2 rounded-xl opacity-90 cursor-not-allowed"
-          >
-            💬 {t.openChat}
-          </button>
-        ) : busy ? (
-          <button
-            onClick={() => onOpenCalendar(pro._id)}
-            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-2 rounded-xl transition active:scale-95"
-          >
-            📅 {t.openCal}
-          </button>
-        ) : (
-          <button
-            disabled
-            className="flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl opacity-70 cursor-not-allowed"
-          >
-            💬 {t.openChat}
-          </button>
-        )}
-      </div>
+      {/* Name */}
+      <p className="font-bold text-slate-800 text-sm truncate w-28 flex-shrink-0">{pro.fullName}</p>
+
+      {/* Hourly rate */}
+      {pro.hourlyRate ? (
+        <span className="flex-shrink-0 text-xs text-slate-400 whitespace-nowrap">
+          My rate: <span className="font-extrabold text-amber-500">${pro.hourlyRate}<span className="font-normal text-slate-400">/hr</span></span>
+        </span>
+      ) : (
+        <span className="flex-shrink-0 text-xs text-slate-300 italic whitespace-nowrap">No rate</span>
+      )}
+
+      {/* Estimated cost: totalHours × hourlyRate */}
+      {tradeEntry.budgetType === 'hours' && tradeEntry.totalHours && pro.hourlyRate && (
+        <span className="flex-shrink-0 text-xs whitespace-nowrap bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-2 py-0.5 rounded-lg">
+          {tradeEntry.totalHours}h × ${pro.hourlyRate} = <span className="font-extrabold">${tradeEntry.totalHours * pro.hourlyRate}</span>
+        </span>
+      )}
+
+      {/* Address */}
+      <span className="text-xs text-slate-400 truncate flex-1 min-w-0">📍 {pro.address}</span>
+
+      {/* Status badge */}
+      {siteBooking ? (
+        <span className="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200 whitespace-nowrap">
+          ✅ {formatBookingDate(siteBooking.date)}
+        </span>
+      ) : (
+        <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${busy ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+          {busy ? t.busy : t.available}
+        </span>
+      )}
+
+      {/* Distance */}
+      <span className="flex-shrink-0 text-xs text-slate-400 whitespace-nowrap">
+        {formatDistance(pro.distance, unit)} {t.distance}
+      </span>
+
+      {/* Action button */}
+      {siteBooking ? (
+        <button disabled className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-xl opacity-90 cursor-not-allowed whitespace-nowrap">
+          💬 {t.openChat}
+        </button>
+      ) : busy ? (
+        <button onClick={() => onOpenCalendar(pro._id)} className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-xl transition active:scale-95 whitespace-nowrap">
+          📅 {t.openCal}
+        </button>
+      ) : (
+        <button disabled className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl opacity-70 cursor-not-allowed whitespace-nowrap">
+          💬 {t.openChat}
+        </button>
+      )}
     </div>
   );
 }
@@ -246,7 +256,7 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
                     type="button"
                     disabled={isAssigned}
                     onClick={() => !isAssigned && onSelectTrade(site._id, isSelected ? null : tr.name)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border-2 transition-all duration-150 active:scale-95 ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border-2 transition-all duration-150 active:scale-95 ${
                       isAssigned
                         ? 'bg-orange-400 border-orange-400 text-white shadow shadow-orange-100 cursor-not-allowed opacity-90'
                         : isSelected
@@ -254,7 +264,18 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
                           : 'bg-white border-amber-200 text-amber-700 hover:border-orange-300 hover:text-orange-600'
                     }`}
                   >
-                    {isAssigned ? `✓ ${tr.name}` : tr.name}
+                    {isAssigned && <span>✓</span>}
+                    <span>{tr.name}</span>
+                    {tr.budgetType === 'amount' && tr.maxAmount && (
+                      <span className={`font-bold px-1 py-0.5 rounded text-[10px] ${isAssigned || isSelected ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+                        ${tr.maxAmount}
+                      </span>
+                    )}
+                    {tr.budgetType === 'hours' && tr.totalHours && (
+                      <span className={`font-bold px-1 py-0.5 rounded text-[10px] ${isAssigned || isSelected ? 'bg-white/20 text-white' : 'bg-violet-50 text-violet-600 border border-violet-200'}`}>
+                        {tr.totalHours}h
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -294,43 +315,101 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
   );
 }
 
-// ── Shared distance slider ───────────────────────────────────────────────────
-function DistancePanel({ unit, setUnit, distance, setDistance, t }) {
+const MAX_RATE = 300;
+
+// ── Shared filters panel ─────────────────────────────────────────────────────
+function DistancePanel({ unit, setUnit, distance, setDistance, maxRate, setMaxRate, minRating, setMinRating, t }) {
   const kmValue     = Math.round(distance * 1.609);
   const displayDist = unit === 'mi' ? `${distance} mi` : `${kmValue} km`;
+  const rateLabel   = maxRate >= MAX_RATE ? 'Any rate' : `Up to $${maxRate}/hr`;
+  const rateActive  = maxRate < MAX_RATE;
+  const ratePct     = (maxRate / MAX_RATE) * 100;
+  const ratingPct   = (minRating / 5) * 100;
 
   return (
-    <div className="mt-8 bg-white/80 backdrop-blur-sm rounded-3xl border border-orange-100 shadow-md px-6 py-5">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-sm font-bold text-slate-700">{t.radius.title}</h3>
-          <p className="text-xs text-slate-400 mt-0.5">{t.radius.desc}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-2xl font-extrabold text-orange-500">{displayDist}</span>
-          <div className="flex items-center bg-slate-100 rounded-xl p-0.5">
-            {['mi', 'km'].map((u) => (
-              <button key={u} onClick={() => setUnit(u)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 ${
-                  unit === u ? 'bg-white text-orange-500 shadow-sm' : 'text-slate-400 hover:text-slate-600'
-                }`}>
-                {u}
-              </button>
-            ))}
+    <div className="mt-8 bg-white/80 backdrop-blur-sm rounded-3xl border border-orange-100 shadow-md px-6 py-5 space-y-6">
+
+      {/* Distance */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-700">{t.radius.title}</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{t.radius.desc}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-extrabold text-orange-500">{displayDist}</span>
+            <div className="flex items-center bg-slate-100 rounded-xl p-0.5">
+              {['mi', 'km'].map((u) => (
+                <button key={u} onClick={() => setUnit(u)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 ${
+                    unit === u ? 'bg-white text-orange-500 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                  }`}>
+                  {u}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+        <input
+          type="range" min={5} max={200} step={5} value={distance}
+          onChange={(e) => setDistance(Number(e.target.value))}
+          className="w-full h-2 rounded-full appearance-none cursor-pointer"
+          style={{ background: `linear-gradient(to right, #f97316 0%, #f97316 ${((distance - 5) / 195) * 100}%, #fed7aa ${((distance - 5) / 195) * 100}%, #fed7aa 100%)` }}
+        />
+        <div className="flex justify-between text-xs text-slate-400 mt-1 px-0.5">
+          <span>5 {unit}</span><span>200 {unit}</span>
+        </div>
       </div>
-      <input
-        type="range" min={5} max={200} step={5} value={distance}
-        onChange={(e) => setDistance(Number(e.target.value))}
-        className="w-full h-2 rounded-full appearance-none cursor-pointer"
-        style={{
-          background: `linear-gradient(to right, #f97316 0%, #f97316 ${((distance - 5) / 195) * 100}%, #fed7aa ${((distance - 5) / 195) * 100}%, #fed7aa 100%)`,
-        }}
-      />
-      <div className="flex justify-between text-xs text-slate-400 mt-1 px-0.5">
-        <span>5 {unit}</span><span>200 {unit}</span>
+
+      <div className="border-t border-slate-100" />
+
+      {/* Max trade rate */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-700">💰 Trade Rate</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Maximum hourly rate to show</p>
+          </div>
+          <span className={`text-lg font-extrabold ${rateActive ? 'text-emerald-500' : 'text-slate-400'}`}>
+            {rateLabel}
+          </span>
+        </div>
+        <input
+          type="range" min={0} max={MAX_RATE} step={5} value={maxRate}
+          onChange={(e) => setMaxRate(Number(e.target.value))}
+          className="w-full h-2 rounded-full appearance-none cursor-pointer"
+          style={{ background: `linear-gradient(to right, #10b981 0%, #10b981 ${ratePct}%, #d1fae5 ${ratePct}%, #d1fae5 100%)` }}
+        />
+        <div className="flex justify-between text-xs text-slate-400 mt-1 px-0.5">
+          <span>$0/hr</span><span>Any</span>
+        </div>
       </div>
+
+      <div className="border-t border-slate-100" />
+
+      {/* Min rating (UI only — backend coming soon) */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-700">⭐ Trade Rating</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Minimum rating — coming soon</p>
+          </div>
+          <span className="text-lg font-extrabold text-slate-300">
+            {minRating > 0 ? `${minRating}+` : 'Any'}
+          </span>
+        </div>
+        <input
+          type="range" min={0} max={5} step={0.5} value={minRating}
+          onChange={(e) => setMinRating(Number(e.target.value))}
+          className="w-full h-2 rounded-full appearance-none cursor-pointer opacity-40 cursor-not-allowed"
+          style={{ background: `linear-gradient(to right, #94a3b8 0%, #94a3b8 ${ratingPct}%, #e2e8f0 ${ratingPct}%, #e2e8f0 100%)` }}
+          disabled
+        />
+        <div className="flex justify-between text-xs text-slate-300 mt-1 px-0.5">
+          <span>0</span><span>5 ⭐</span>
+        </div>
+      </div>
+
     </div>
   );
 }
@@ -370,7 +449,8 @@ function SearchResults({ search, unit, t, onClose, onOpenCalendar }) {
             {search.results.map((pro) => (
               <ProCard key={pro._id} pro={pro} unit={unit} t={tr}
                 siteName={search.siteName}
-                onOpenCalendar={(id) => onOpenCalendar(id, search.siteName, search.siteAddress)} />
+                tradeEntry={search.tradeEntry}
+                onOpenCalendar={(id) => onOpenCalendar(id, search.siteName, search.siteAddress, search.siteId)} />
             ))}
           </div>
         )}
@@ -399,6 +479,8 @@ export default function ContractorDashboard() {
   const [sitesLoading, setSitesLoading] = useState(false);
   const [unit,         setUnit]         = useState('mi');
   const [distance,     setDistance]     = useState(25);
+  const [maxRate,      setMaxRate]      = useState(MAX_RATE);
+  const [minRating,    setMinRating]    = useState(0);
   const [search,       setSearch]       = useState(null);
   const [manageSite,   setManageSite]   = useState(null);
   const [photoSite,    setPhotoSite]    = useState(null);
@@ -447,11 +529,12 @@ export default function ContractorDashboard() {
 
   const handleFind = async (site, trade) => {
     setSelection(null);
-    setSearch({ siteName: site.name, siteAddress: site.address, trade, loading: true, results: [] });
+    const tradeEntry = site.tradesNeeded.find((t) => t.name === trade) || {};
+    setSearch({ siteId: site._id, siteName: site.name, siteAddress: site.address, trade, tradeEntry, loading: true, results: [] });
     setTimeout(() => document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     try {
-      const data = await findTradesForSite(site._id, trade, distance, unit);
-      setSearch({ siteName: site.name, siteAddress: site.address, trade, loading: false, results: data.results });
+      const data = await findTradesForSite(site._id, trade, distance, unit, maxRate < MAX_RATE ? maxRate : null);
+      setSearch({ siteId: site._id, siteName: site.name, siteAddress: site.address, trade, tradeEntry, loading: false, results: data.results });
 
       // If any result has a confirmed booking for this site, flip that trade's assigned → true
       const hasScheduled = data.results.some((pro) =>
@@ -568,6 +651,8 @@ export default function ContractorDashboard() {
                 <DistancePanel
                   unit={unit} setUnit={setUnit}
                   distance={distance} setDistance={setDistance}
+                  maxRate={maxRate} setMaxRate={setMaxRate}
+                  minRating={minRating} setMinRating={setMinRating}
                   t={t.findTrade}
                 />
 
@@ -578,7 +663,7 @@ export default function ContractorDashboard() {
                       unit={unit}
                       t={t}
                       onClose={() => setSearch(null)}
-                      onOpenCalendar={(proId, siteName, siteAddress) => setCalendarPro({ proId, siteName, siteAddress })}
+                      onOpenCalendar={(proId, siteName, siteAddress, siteId) => setCalendarPro({ proId, siteName, siteAddress, siteId })}
                     />
                   </div>
                 )}
@@ -617,6 +702,7 @@ export default function ContractorDashboard() {
           tradeId={calendarPro.proId}
           siteName={calendarPro.siteName}
           siteAddress={calendarPro.siteAddress}
+          siteId={calendarPro.siteId}
           mySiteNames={sites.map((s) => s.name)}
           onClose={() => setCalendarPro(null)}
         />
