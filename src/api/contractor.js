@@ -23,3 +23,7 @@ export const getTradeBusyDays = (tradeId) =>
 // Ask trade pro for availability on a specific date
 export const askAvailability = (tradeId, date, siteName, siteAddress, lang, siteId) =>
   api.post(`/contractor/trade-pros/${tradeId}/ask-availability`, { date, siteName, siteAddress, lang, siteId }).then(r => r.data);
+
+// Applications (trade pros who applied to contractor sites)
+export const getApplications    = () => api.get('/contractor/applications').then(r => r.data.applications);
+export const approveApplication = (id, scheduledDate) => api.patch(`/contractor/applications/${id}/approve`, { scheduledDate }).then(r => r.data);

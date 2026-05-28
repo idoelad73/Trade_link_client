@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getSites, findTradesForSite, updateSite } from '../../api/contractor.js';
+import { getSites, findTradesForSite, updateSite, getApplications } from '../../api/contractor.js';
 import ContractorInfoModal from '../../components/contractor/ContractorInfoModal.jsx';
 import AddSiteModal from '../../components/contractor/AddSiteModal.jsx';
 import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx';
 import UpdateSitePhotoModal from '../../components/contractor/UpdateSitePhotoModal.jsx';
 import TradeCalendarModal from '../../components/contractor/TradeCalendarModal.jsx';
+import ContractorApplicationsModal from '../../components/contractor/ContractorApplicationsModal.jsx';
 
 const content = {
   en: {
@@ -484,9 +485,23 @@ export default function ContractorDashboard() {
   const [search,       setSearch]       = useState(null);
   const [manageSite,   setManageSite]   = useState(null);
   const [photoSite,    setPhotoSite]    = useState(null);
-  const [calendarPro, setCalendarPro] = useState(null); // { proId, siteName }
-  // Single selection across all cards: { siteId, trade } | null
-  const [selection, setSelection] = useState(null);
+  const [calendarPro,          setCalendarPro]          = useState(null);
+  const [selection,            setSelection]            = useState(null);
+  const [applicationsOpen,     setApplicationsOpen]     = useState(false);
+  const [applicationsCount,    setApplicationsCount]    = useState(0);
+
+  const refreshApplicationCount = () =>
+    getApplications().then((apps) => setApplicationsCount(apps.filter(a => a.status === 'pending').length)).catch(() => {});
+
+  const refreshSites = () =>
+    getSites().then((loaded) =>
+      setSites(loaded.map((s) => ({
+        ...s,
+        tradesNeeded: (s.tradesNeeded || []).map((t) =>
+          typeof t === 'string' ? { name: t, assigned: false } : t
+        ),
+      })))
+    ).catch(console.error);
 
   const handleSelectTrade = (siteId, trade) => {
     setSelection(trade ? { siteId, trade } : null);
@@ -494,6 +509,8 @@ export default function ContractorDashboard() {
 
   const kmValue     = Math.round(distance * 1.609);
   const displayDist = unit === 'mi' ? `${distance} mi` : `${kmValue} km`;
+
+  useEffect(() => { refreshApplicationCount(); }, []);
 
   useEffect(() => {
     if (activeView === 'allSites') {
@@ -535,25 +552,6 @@ export default function ContractorDashboard() {
     try {
       const data = await findTradesForSite(site._id, trade, distance, unit, maxRate < MAX_RATE ? maxRate : null);
       setSearch({ siteId: site._id, siteName: site.name, siteAddress: site.address, trade, tradeEntry, loading: false, results: data.results });
-
-      // If any result has a confirmed booking for this site, flip that trade's assigned → true
-      const hasScheduled = data.results.some((pro) =>
-        pro.bookings?.some((b) => b.siteName === site.name)
-      );
-      if (hasScheduled) {
-        const alreadyMarked = site.tradesNeeded.find((t) => t.name === trade)?.assigned;
-        if (!alreadyMarked) {
-          const updatedTrades = site.tradesNeeded.map((t) =>
-            t.name === trade ? { ...t, assigned: true } : t
-          );
-          // Optimistic local update
-          setSites((prev) => prev.map((s) =>
-            s._id === site._id ? { ...s, tradesNeeded: updatedTrades } : s
-          ));
-          // Persist to MongoDB
-          updateSite(site._id, { tradesNeeded: updatedTrades }).catch(console.error);
-        }
-      }
     } catch (err) {
       const noLocation = err?.response?.status === 422;
       setSearch({ siteName: site.name, trade, loading: false, results: [], noLocation, error: !noLocation });
@@ -588,10 +586,27 @@ export default function ContractorDashboard() {
           </div>
 
           <div className="flex items-center gap-3 pl-4 border-l border-slate-100 flex-shrink-0">
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-bold text-slate-700 leading-none">{user?.companyName}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{t.role}</p>
-            </div>
+            <button
+              onClick={() => setApplicationsOpen(true)}
+              className="hidden sm:flex items-center gap-2 rounded-xl hover:bg-amber-50 px-2 py-1 transition group"
+              title="Job Applications"
+            >
+              <div className="relative">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-100 to-sky-100 flex items-center justify-center text-base">🏗️</div>
+                {applicationsCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow border-2 border-white leading-none">
+                    {applicationsCount > 99 ? '99+' : applicationsCount}
+                  </span>
+                )}
+              </div>
+              <div className="text-right hidden sm:block">
+                <p className="text-xs font-bold text-slate-700 leading-none">{user?.companyName}</p>
+                {applicationsCount > 0
+                  ? <p className="text-xs font-extrabold text-amber-500 mt-0.5">{applicationsCount} application{applicationsCount !== 1 ? 's' : ''}</p>
+                  : <p className="text-xs text-slate-400 mt-0.5">{t.role}</p>
+                }
+              </div>
+            </button>
             <button onClick={() => { clearAuth(); navigate('/'); }}
               className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl transition">
               🚪 {t.logOut}
@@ -705,6 +720,12 @@ export default function ContractorDashboard() {
           siteId={calendarPro.siteId}
           mySiteNames={sites.map((s) => s.name)}
           onClose={() => setCalendarPro(null)}
+        />
+      )}
+      {applicationsOpen && (
+        <ContractorApplicationsModal
+          onClose={() => setApplicationsOpen(false)}
+          onApproved={() => { refreshApplicationCount(); refreshSites(); }}
         />
       )}
     </div>
