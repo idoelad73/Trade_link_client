@@ -44,8 +44,7 @@ const content = {
       busy:        'Busy today',
       available:   'Available',
       scheduled:   'Scheduled',
-      openCal:     'Open Trade Calendar',
-      openChat:    'Open Chat',
+      openCal:     'Schedule',
       close:       'Close Results',
     },
   },
@@ -82,8 +81,7 @@ const content = {
       busy:        'Ocupado hoy',
       available:   'Disponible',
       scheduled:   'Programado',
-      openCal:     'Ver Calendario',
-      openChat:    'Abrir Chat',
+      openCal:     'Agendar',
       close:       'Cerrar Resultados',
     },
   },
@@ -161,19 +159,12 @@ function ProCard({ pro, unit, t, siteName, tradeEntry = {}, onOpenCalendar }) {
           </span>
         )}
         <div className="ml-auto flex-shrink-0">
-          {siteBooking ? (
-            <button disabled className="flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-xl opacity-90 cursor-not-allowed">
-              💬 {t.openChat}
-            </button>
-          ) : busy ? (
-            <button onClick={() => onOpenCalendar(pro._id)} className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-xl transition active:scale-95">
-              📅 {t.openCal}
-            </button>
-          ) : (
-            <button disabled className="flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl opacity-70 cursor-not-allowed">
-              💬 {t.openChat}
-            </button>
-          )}
+          <button
+            onClick={() => onOpenCalendar(pro._id)}
+            className="flex items-center gap-1 text-xs font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-3 py-1.5 rounded-xl transition active:scale-95"
+          >
+            📅 {t.openCal}
+          </button>
         </div>
       </div>
     </div>

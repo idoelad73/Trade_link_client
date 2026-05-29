@@ -18,6 +18,9 @@ const content = {
     approvalBadge:   '🎉 Job Approved',
     approvalTitle:   'Your application was approved!',
     approvalBy:      'Approved by',
+    appliedBadge:    '📋 Your Application',
+    appliedTo:       'Applied to',
+    appliedDate:     'Requested Start',
   },
   es: {
     badge:       '📬 Mensajes de Disponibilidad',
@@ -34,6 +37,9 @@ const content = {
     approvalBadge:   '🎉 Trabajo Aprobado',
     approvalTitle:   '¡Tu solicitud fue aprobada!',
     approvalBy:      'Aprobado por',
+    appliedBadge:    '📋 Tu Solicitud',
+    appliedTo:       'Solicitado a',
+    appliedDate:     'Inicio Solicitado',
   },
 };
 
@@ -114,36 +120,57 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
           ) : (
             <div className="space-y-4">
               {messages.map((msg) => {
-                const isApproval = msg.type === 'approval';
+                const isApproval   = msg.type === 'approval';
+                const isMyApply    = msg.senderType === 'trade';
                 return (
-                <div key={msg._id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-shadow ${isApproval ? 'border-emerald-200' : 'border-slate-100'}`}>
+                <div key={msg._id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-shadow ${isApproval ? 'border-emerald-200' : isMyApply ? 'border-amber-200' : 'border-slate-100'}`}>
 
-                  {/* Top accent bar for approvals */}
+                  {/* Top accent bar */}
                   {isApproval && <div className="h-1 w-full bg-gradient-to-r from-emerald-400 to-teal-400" />}
+                  {isMyApply  && <div className="h-1 w-full bg-gradient-to-r from-amber-400 to-orange-400" />}
 
                   {/* Site photo + name bar */}
                   <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-slate-50">
                     {msg.site?.photo ? (
                       <img src={msg.site.photo} alt={msg.site.name} className="w-12 h-12 rounded-xl object-cover flex-shrink-0 border border-slate-100" />
                     ) : (
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 ${isApproval ? 'bg-gradient-to-br from-emerald-50 to-teal-50' : 'bg-gradient-to-br from-amber-50 to-sky-50'}`}>
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 ${
+                        isApproval ? 'bg-gradient-to-br from-emerald-50 to-teal-50'
+                        : isMyApply ? 'bg-gradient-to-br from-amber-50 to-orange-50'
+                        : 'bg-gradient-to-br from-amber-50 to-sky-50'}`}>
                         {msg.site?.type === 'residential' ? '🏠' : '🏢'}
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      {isApproval && (
-                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-0.5">{t.approvalBadge}</p>
-                      )}
+                      {isApproval && <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide mb-0.5">{t.approvalBadge}</p>}
+                      {isMyApply  && <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide mb-0.5">{t.appliedBadge}</p>}
                       <p className="font-extrabold text-slate-800 text-sm truncate">{msg.site?.name}</p>
                       <p className="text-xs text-slate-400 truncate">📍 {msg.site?.address}</p>
                     </div>
-                    <span className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-600 border border-green-200">
+                    <span className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap ${
+                      isApproval ? 'bg-green-100 text-green-600 border-green-200'
+                      : msg.status === 'approved' ? 'bg-green-100 text-green-600 border-green-200'
+                      : 'bg-amber-100 text-amber-600 border-amber-200'
+                    }`}>
                       {isApproval ? '✅ Approved' : t.status[msg.status]}
                     </span>
                   </div>
 
-                  {/* Approval card body */}
-                  {isApproval ? (
+                  {/* My application card body */}
+                  {isMyApply ? (
+                    <div className="px-4 py-3 space-y-2">
+                      <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                        <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wide mb-0.5">{t.appliedTo}</p>
+                        <p className="text-xs font-bold text-amber-700 truncate">🏗️ {msg.contractor?.companyName || '—'}</p>
+                      </div>
+                      {msg.requestedDate && (
+                        <div className="bg-sky-50 border border-sky-100 rounded-xl px-3 py-2.5">
+                          <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-wide mb-0.5">{t.appliedDate}</p>
+                          <p className="text-xs font-bold text-sky-700">📅 {formatDate(msg.requestedDate)}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : isApproval ? (
                     <div className="px-4 py-3 space-y-2">
                       <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5">
                         <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide mb-0.5">{t.approvalBy}</p>
@@ -183,7 +210,7 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
                     </div>
                   )}
 
-                  {!isApproval && msg.status === 'pending' && (
+                  {!isApproval && !isMyApply && msg.status === 'pending' && (
                     <div className="px-4 pb-4">
                       <button
                         onClick={() => handleApprove(msg)}

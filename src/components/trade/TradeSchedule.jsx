@@ -563,6 +563,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                         ) : t.apply}
                       </button>
                     </div>
+
                   </div>
                 );
               })}
