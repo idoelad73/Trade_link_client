@@ -116,68 +116,66 @@ function ProCard({ pro, unit, t, siteName, tradeEntry = {}, onOpenCalendar }) {
       : 'border-emerald-100';
 
   return (
-    <div className={`bg-white rounded-2xl border shadow-sm px-4 py-3 flex items-center gap-3 transition-all ${borderClass}`}>
+    <div className={`bg-white rounded-2xl border shadow-sm px-4 py-3 transition-all ${borderClass}`}>
 
-      {/* Avatar */}
-      <div className="flex-shrink-0">
-        {pro.photo
-          ? <img src={pro.photo} alt={pro.fullName} className="w-10 h-10 rounded-xl object-cover object-top border border-slate-100" />
-          : <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-100 to-amber-100 flex items-center justify-center text-lg">🔧</div>
-        }
+      {/* Row 1: avatar + name + status + distance */}
+      <div className="flex items-center gap-3">
+        <div className="flex-shrink-0">
+          {pro.photo
+            ? <img src={pro.photo} alt={pro.fullName} className="w-10 h-10 rounded-xl object-cover object-top border border-slate-100" />
+            : <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-100 to-amber-100 flex items-center justify-center text-lg">🔧</div>
+          }
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-slate-800 text-sm truncate">{pro.fullName}</p>
+          <p className="text-xs text-slate-400 truncate">📍 {pro.address}</p>
+        </div>
+        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+          {siteBooking ? (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200 whitespace-nowrap">
+              ✅ {formatBookingDate(siteBooking.date)}
+            </span>
+          ) : (
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${busy ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+              {busy ? t.busy : t.available}
+            </span>
+          )}
+          <span className="text-[10px] text-slate-400 whitespace-nowrap">
+            {formatDistance(pro.distance, unit)} {t.distance}
+          </span>
+        </div>
       </div>
 
-      {/* Name */}
-      <p className="font-bold text-slate-800 text-sm truncate w-28 flex-shrink-0">{pro.fullName}</p>
-
-      {/* Hourly rate */}
-      {pro.hourlyRate ? (
-        <span className="flex-shrink-0 text-xs text-slate-400 whitespace-nowrap">
-          My rate: <span className="font-extrabold text-amber-500">${pro.hourlyRate}<span className="font-normal text-slate-400">/hr</span></span>
-        </span>
-      ) : (
-        <span className="flex-shrink-0 text-xs text-slate-300 italic whitespace-nowrap">No rate</span>
-      )}
-
-      {/* Estimated cost: totalHours × hourlyRate */}
-      {tradeEntry.budgetType === 'hours' && tradeEntry.totalHours && pro.hourlyRate && (
-        <span className="flex-shrink-0 text-xs whitespace-nowrap bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-2 py-0.5 rounded-lg">
-          {tradeEntry.totalHours}h × ${pro.hourlyRate} = <span className="font-extrabold">${tradeEntry.totalHours * pro.hourlyRate}</span>
-        </span>
-      )}
-
-      {/* Address */}
-      <span className="text-xs text-slate-400 truncate flex-1 min-w-0">📍 {pro.address}</span>
-
-      {/* Status badge */}
-      {siteBooking ? (
-        <span className="flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200 whitespace-nowrap">
-          ✅ {formatBookingDate(siteBooking.date)}
-        </span>
-      ) : (
-        <span className={`flex-shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${busy ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-          {busy ? t.busy : t.available}
-        </span>
-      )}
-
-      {/* Distance */}
-      <span className="flex-shrink-0 text-xs text-slate-400 whitespace-nowrap">
-        {formatDistance(pro.distance, unit)} {t.distance}
-      </span>
-
-      {/* Action button */}
-      {siteBooking ? (
-        <button disabled className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-xl opacity-90 cursor-not-allowed whitespace-nowrap">
-          💬 {t.openChat}
-        </button>
-      ) : busy ? (
-        <button onClick={() => onOpenCalendar(pro._id)} className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-xl transition active:scale-95 whitespace-nowrap">
-          📅 {t.openCal}
-        </button>
-      ) : (
-        <button disabled className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl opacity-70 cursor-not-allowed whitespace-nowrap">
-          💬 {t.openChat}
-        </button>
-      )}
+      {/* Row 2: rate + estimated cost + action button */}
+      <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+        {pro.hourlyRate ? (
+          <span className="text-xs text-slate-500">
+            💰 <span className="font-extrabold text-amber-500">${pro.hourlyRate}/hr</span>
+          </span>
+        ) : (
+          <span className="text-xs text-slate-300 italic">No rate</span>
+        )}
+        {tradeEntry.budgetType === 'hours' && tradeEntry.totalHours && pro.hourlyRate && (
+          <span className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-2 py-0.5 rounded-lg">
+            {tradeEntry.totalHours}h × ${pro.hourlyRate} = <span className="font-extrabold">${tradeEntry.totalHours * pro.hourlyRate}</span>
+          </span>
+        )}
+        <div className="ml-auto flex-shrink-0">
+          {siteBooking ? (
+            <button disabled className="flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-300 px-3 py-1.5 rounded-xl opacity-90 cursor-not-allowed">
+              💬 {t.openChat}
+            </button>
+          ) : busy ? (
+            <button onClick={() => onOpenCalendar(pro._id)} className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-xl transition active:scale-95">
+              📅 {t.openCal}
+            </button>
+          ) : (
+            <button disabled className="flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl opacity-70 cursor-not-allowed">
+              💬 {t.openChat}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -301,13 +299,13 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
             <button
               onClick={() => onFind(site, selectedTrade)}
               disabled={isSearching}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 disabled:opacity-60 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow shadow-orange-200 transition-all active:scale-95 whitespace-nowrap"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 disabled:opacity-60 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow shadow-orange-200 transition-all active:scale-95"
             >
               {isSearching ? (
                 <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
               ) : '🔍'}
               {t.findTrade.findBtn}
-              <span className="font-normal opacity-80">{t.findTrade.within} {displayDist}</span>
+              <span className="font-normal opacity-80 hidden sm:inline">{t.findTrade.within} {displayDist}</span>
             </button>
           )}
         </div>
@@ -562,71 +560,72 @@ export default function ContractorDashboard() {
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-yellow-50 to-amber-50 font-sans text-slate-800">
 
       <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-yellow-100 shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 flex items-center">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 flex items-center">
 
-          <div className="flex items-center gap-2 py-4 pr-8 border-r border-slate-100 mr-4 flex-shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-amber-400 flex items-center justify-center shadow">
-              <span className="text-white font-bold text-sm">T</span>
+          <div className="flex items-center gap-2 py-3 sm:py-4 pr-4 sm:pr-8 border-r border-slate-100 mr-2 sm:mr-4 flex-shrink-0">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-br from-sky-400 to-amber-400 flex items-center justify-center shadow">
+              <span className="text-white font-bold text-xs sm:text-sm">T</span>
             </div>
-            <span className="text-lg font-bold text-sky-600 tracking-tight">TradeLink</span>
+            <span className="text-base sm:text-lg font-bold text-sky-600 tracking-tight hidden sm:block">TradeLink</span>
           </div>
 
-          <div className="flex items-center gap-1 flex-1">
+          <div className="flex items-center flex-1 overflow-x-auto scrollbar-none">
             {NAV_ITEMS.map((item) => {
               const isActive = !item.modal && activeView === item.id;
               return (
                 <button key={item.id} onClick={() => handleNavClick(item)}
-                  className={`flex items-center gap-2 px-4 py-4 text-sm font-semibold border-b-2 transition-all duration-150 whitespace-nowrap ${
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-4 py-3 sm:py-4 text-xs sm:text-sm font-semibold border-b-2 transition-all duration-150 flex-shrink-0 ${
                     isActive ? 'border-amber-400 text-amber-600' : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-200'
                   }`}>
-                  <span>{item.icon}</span>{item.label}
+                  <span>{item.icon}</span>
+                  <span className="hidden sm:inline">{item.label}</span>
                 </button>
               );
             })}
           </div>
 
-          <div className="flex items-center gap-3 pl-4 border-l border-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-2 pl-2 sm:pl-4 border-l border-slate-100 flex-shrink-0">
             <button
               onClick={() => setApplicationsOpen(true)}
-              className="hidden sm:flex items-center gap-2 rounded-xl hover:bg-amber-50 px-2 py-1 transition group"
+              className="flex items-center gap-1.5 rounded-xl hover:bg-amber-50 px-1.5 sm:px-2 py-1 transition group"
               title="Job Applications"
             >
               <div className="relative">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-100 to-sky-100 flex items-center justify-center text-base">🏗️</div>
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-amber-100 to-sky-100 flex items-center justify-center text-sm sm:text-base">🏗️</div>
                 {applicationsCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow border-2 border-white leading-none">
                     {applicationsCount > 99 ? '99+' : applicationsCount}
                   </span>
                 )}
               </div>
-              <div className="text-right hidden sm:block">
+              <div className="hidden sm:block text-right">
                 <p className="text-xs font-bold text-slate-700 leading-none">{user?.companyName}</p>
                 {applicationsCount > 0
-                  ? <p className="text-xs font-extrabold text-amber-500 mt-0.5">{applicationsCount} application{applicationsCount !== 1 ? 's' : ''}</p>
+                  ? <p className="text-xs font-extrabold text-amber-500 mt-0.5">{applicationsCount} app{applicationsCount !== 1 ? 's' : ''}</p>
                   : <p className="text-xs text-slate-400 mt-0.5">{t.role}</p>
                 }
               </div>
             </button>
             <button onClick={() => { clearAuth(); navigate('/'); }}
-              className="flex items-center gap-1.5 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl transition">
-              🚪 {t.logOut}
+              className="flex items-center gap-1 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 px-2 sm:px-3 py-2 rounded-xl transition">
+              🚪<span className="hidden sm:inline"> {t.logOut}</span>
             </button>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-6xl mx-auto px-6 py-10">
+      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-10">
 
         {activeView === 'allSites' && (
           <div>
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between gap-3 mb-6">
               <div>
-                <h1 className="text-2xl font-extrabold text-slate-800">{t.allSites.title}</h1>
-                <p className="text-slate-500 text-sm mt-0.5">{t.allSites.subtitle(sites.length)}</p>
+                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">{t.allSites.title}</h1>
+                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">{t.allSites.subtitle(sites.length)}</p>
               </div>
               <button onClick={() => setOpenModal('addSite')}
-                className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-sky-400 hover:from-amber-400 text-white text-sm font-semibold px-5 py-2.5 rounded-2xl shadow shadow-amber-200 transition-all active:scale-[0.99]">
-                ➕ {t.allSites.addBtn}
+                className="flex-shrink-0 flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-sky-400 hover:from-amber-400 text-white text-xs sm:text-sm font-semibold px-3 sm:px-5 py-2 sm:py-2.5 rounded-2xl shadow shadow-amber-200 transition-all active:scale-[0.99]">
+                ➕ <span className="hidden xs:inline sm:inline">{t.allSites.addBtn}</span><span className="sm:hidden">Add</span>
               </button>
             </div>
 

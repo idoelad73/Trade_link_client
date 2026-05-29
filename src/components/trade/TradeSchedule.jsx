@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { updateSchedule, findJobs, applyToJob } from '../../api/trade.js';
 import useUIStore from '../../stores/uiStore.js';
-import { toast } from 'sonner';
+import { toast } from '../../utils/toast.js';
 
 // ── Working-day helpers ────────────────────────────────────────────────────────
 const _hCache = {};
@@ -381,7 +381,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
           </h2>
         </div>
 
-        <div className="flex items-center gap-3 px-6 py-3 border-b border-sky-50 bg-sky-50/40 flex-wrap">
+        <div className="flex items-center gap-3 px-3 sm:px-6 py-2 sm:py-3 border-b border-sky-50 bg-sky-50/40 overflow-x-auto scrollbar-none flex-nowrap">
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.free}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-300" /><span className="text-xs text-slate-500 font-medium">{t.legend.busy}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-700" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
@@ -391,9 +391,9 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
           <span className="text-xs text-slate-400 ml-auto">{jobResults ? t.pickDateFirst : t.hint}</span>
         </div>
 
-        <div className="flex gap-0 divide-x divide-sky-100">
-          <div className="flex-1 min-w-0">{renderMonth(m1Y, m1M)}</div>
-          <div className="flex-1 min-w-0">{renderMonth(m2Y, m2M)}</div>
+        <div className="flex gap-0 divide-x divide-sky-100 overflow-x-auto">
+          <div className="flex-1 min-w-[160px]">{renderMonth(m1Y, m1M)}</div>
+          <div className="flex-1 min-w-[160px]">{renderMonth(m2Y, m2M)}</div>
         </div>
 
         <div className="px-6 pb-5">
@@ -427,7 +427,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
         </div>
 
         <div className="text-center">
-          <span className="text-4xl font-extrabold text-sky-500">{displayDist}</span>
+          <span className="text-3xl sm:text-4xl font-extrabold text-sky-500">{displayDist}</span>
         </div>
 
         <div>
@@ -443,12 +443,12 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
         <button
           onClick={handleFindJobs}
           disabled={jobsLoading}
-          className="w-full bg-gradient-to-r from-amber-500 via-amber-400 to-sky-400 hover:from-amber-400 hover:to-sky-300 disabled:opacity-70 text-white font-extrabold text-base py-4 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-[0.99] tracking-wide flex items-center justify-center gap-3 mt-2"
+          className="w-full bg-gradient-to-r from-amber-500 via-amber-400 to-sky-400 hover:from-amber-400 hover:to-sky-300 disabled:opacity-70 text-white font-extrabold text-sm sm:text-base py-3.5 sm:py-4 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-[0.99] tracking-wide flex items-center justify-center gap-2 sm:gap-3 mt-2"
         >
           {jobsLoading ? (
             <><span className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />{t.searching}</>
           ) : (
-            <><span className="text-xl">🔍</span>{t.findJob}<span className="text-sm font-normal opacity-80">{t.within} {displayDist}</span></>
+            <><span className="text-lg sm:text-xl">🔍</span>{t.findJob}<span className="text-xs sm:text-sm font-normal opacity-80 hidden xs:inline sm:inline">{t.within} {displayDist}</span></>
           )}
         </button>
       </div>

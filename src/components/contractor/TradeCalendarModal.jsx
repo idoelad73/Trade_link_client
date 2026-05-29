@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getTradeBusyDays, askAvailability } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
-import { toast } from 'sonner';
+import { toast } from '../../utils/toast.js';
 
 const DAYS = {
   en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],

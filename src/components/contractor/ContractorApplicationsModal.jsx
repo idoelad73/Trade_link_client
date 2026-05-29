@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getApplications, approveApplication } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
+import { toast } from '../../utils/toast.js';
 
 const content = {
   en: {
@@ -15,8 +16,9 @@ const content = {
     approve:       '✓ Approve',
     approving:     '…',
     close:         'Close',
-    applied:       'Applied',
-    proposedDate:  'Proposed date',
+    applied:        'Applied',
+    proposedDate:   'Proposed date',
+    approvedToast:  (name) => `✅ Approval sent to ${name}`,
   },
   es: {
     badge:       '📬 Solicitudes de Trabajo',
@@ -30,8 +32,9 @@ const content = {
     approve:       '✓ Aprobar',
     approving:     '…',
     close:         'Cerrar',
-    applied:       'Aplicó',
-    proposedDate:  'Fecha propuesta',
+    applied:        'Aplicó',
+    proposedDate:   'Fecha propuesta',
+    approvedToast:  (name) => `✅ Aprobación enviada a ${name}`,
   },
 };
 
@@ -64,6 +67,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
       setApplications((prev) =>
         prev.map((a) => a._id === app._id ? { ...a, status: 'accepted' } : a)
       );
+      toast.success(t.approvedToast(app.tradePro?.fullName ?? ''));
       onApproved?.();
     } catch (err) {
       console.error(err);
@@ -81,12 +85,12 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[95dvh] sm:max-h-[90vh] flex flex-col mx-2 sm:mx-0">
 
         <div className="h-1.5 w-full bg-gradient-to-r from-amber-400 to-sky-400 flex-shrink-0" />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 sm:px-8 py-4 sm:py-5 border-b border-slate-100 flex-shrink-0">
           <div>
             <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 mb-2">
               {t.badge}
@@ -100,7 +104,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto px-8 py-6 flex-1">
+        <div className="overflow-y-auto px-4 sm:px-8 py-4 sm:py-6 flex-1">
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <div className="w-8 h-8 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
@@ -135,7 +139,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                     </div>
 
                     {/* Details grid */}
-                    <div className="px-4 py-3 grid grid-cols-2 gap-3">
+                    <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
 
                       {/* Site */}
                       <div className="bg-sky-50 border border-sky-100 rounded-xl px-3 py-2.5">
@@ -193,7 +197,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
           )}
         </div>
 
-        <div className="px-8 py-5 border-t border-slate-100 flex-shrink-0">
+        <div className="px-4 sm:px-8 py-4 sm:py-5 border-t border-slate-100 flex-shrink-0">
           <button
             onClick={onClose}
             className="w-full py-3 rounded-2xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition"
