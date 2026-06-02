@@ -1,13 +1,15 @@
 import axios from 'axios';
+import useAuthStore from '../stores/authStore.js';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
   withCredentials: true,
 });
 
-// Request interceptor — attach token if needed
+// Request interceptor — attach JWT as Bearer token
 api.interceptors.request.use((config) => {
-  // functional code added later
+  const token = useAuthStore.getState().token;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
