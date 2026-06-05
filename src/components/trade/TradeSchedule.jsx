@@ -258,14 +258,6 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
     const actualStart = (te?.budgetType === 'hours' && te?.totalHours)
       ? getWorkingDaysRange(baseDate, te.totalHours)[0]
       : nextWorkingDay(baseDate);
-    const previewRange = (te?.budgetType === 'hours' && te?.totalHours)
-      ? getWorkingDaysRange(actualStart, te.totalHours)
-      : [actualStart];
-    if (previewRange.some(d => appliedDates.has(d))) {
-      toast.warning(t.applyOverlap, { duration: 4000 });
-      return;
-    }
-
     setApplyingId(job._id);
     try {
       await applyToJob(job._id, lang, actualStart);
@@ -289,7 +281,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
     } finally {
       setApplyingId(null);
     }
-  }, [applyingId, selectedJobDate, appliedDates, lang, t]);
+  }, [applyingId, selectedJobDate, lang, t]);
 
   const todayKey = toDateKey(today.getFullYear(), today.getMonth(), today.getDate());
 
@@ -368,8 +360,13 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                                   : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
                     ${isToday && !isSelected && !isPending ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}
                 >
-                  {day}
-                  {(isBooked || isOrder || isApplied || isPending) && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/80" />}
+                  <span className="leading-none">{day}</span>
+                  {(isBooked || isOrder) && dbBooking?.siteName && (
+                    <span className="absolute bottom-0.5 left-0 right-0 text-[6px] font-bold text-white/90 text-center px-0.5 truncate leading-none">
+                      {dbBooking.siteName}
+                    </span>
+                  )}
+                  {!(isBooked || isOrder) && (isApplied || isPending) && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/80" />}
                   {isToday && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/80" />}
                 </button>
                 {dbBooking && (

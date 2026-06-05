@@ -244,7 +244,12 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
                                 : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
                           ${isToday ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}
                       >
-                        {day}
+                        <span className="leading-none">{day}</span>
+                        {booking && (
+                          <span className="absolute bottom-0.5 left-0 right-0 text-[6px] font-bold text-white/90 text-center px-0.5 truncate leading-none">
+                            {booking.siteName}
+                          </span>
+                        )}
                         {isToday && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/80" />}
                       </button>
                       {/* Tooltip — only visible to the contractor who owns this site */}

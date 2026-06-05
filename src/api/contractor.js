@@ -27,7 +27,5 @@ export const askAvailability = (tradeId, date, siteName, siteAddress, lang, site
 // Applications (trade pros who applied to contractor sites)
 export const getApplications    = () => api.get('/contractor/applications').then(r => r.data.applications);
 export const approveApplication = (id, scheduledDate) => api.patch(`/contractor/applications/${id}/approve`, { scheduledDate }).then(r => r.data);
+export const getWorkPlan        = (siteId) => api.get(`/contractor/sites/${siteId}/work-plan`).then(r => r.data);
 
-// Availability-approved notifications
-export const getNotifications       = () => api.get('/contractor/notifications').then(r => r.data.notifications);
-export const markNotificationsRead  = () => api.patch('/contractor/notifications/read').then(r => r.data);

@@ -9,6 +9,7 @@ import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx
 import UpdateSitePhotoModal from '../../components/contractor/UpdateSitePhotoModal.jsx';
 import TradeCalendarModal from '../../components/contractor/TradeCalendarModal.jsx';
 import ContractorApplicationsModal from '../../components/contractor/ContractorApplicationsModal.jsx';
+import WorkPlanModal from '../../components/contractor/WorkPlanModal.jsx';
 
 const content = {
   en: {
@@ -181,7 +182,7 @@ function fmtDate(dateKey) {
 }
 
 // ── Site card with per-site trade picker ─────────────────────────────────────
-function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, onManageTrades, onUpdatePhoto, searchState }) {
+function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, onManageTrades, onUpdatePhoto, onWorkPlan, searchState }) {
   const statusLabel   = t.status[site.status] ?? site.status;
   const isSearching   = searchState?.loading;
   const hasNoTrades   = !site.tradesNeeded?.length;
@@ -211,6 +212,17 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
         >
           ✏️ Trades
         </button>
+        {/* Work Plan button — top-left corner, shown when at least one trade is assigned */}
+        {hasAssigned && (
+          <button
+            type="button"
+            onClick={() => onWorkPlan(site)}
+            title="Work Plan"
+            className="absolute top-2 left-2 flex items-center gap-1 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold px-2.5 py-1 rounded-xl shadow-sm transition-all active:scale-95"
+          >
+            📋 Work Plan
+          </button>
+        )}
         {/* Update photo button — bottom-left corner */}
         <button
           type="button"
@@ -500,6 +512,7 @@ export default function ContractorDashboard() {
   const [search,       setSearch]       = useState(null);
   const [manageSite,   setManageSite]   = useState(null);
   const [photoSite,    setPhotoSite]    = useState(null);
+  const [workPlanSite, setWorkPlanSite] = useState(null);
   const [calendarPro,          setCalendarPro]          = useState(null);
   const [selection,            setSelection]            = useState(null);
   const [applicationsOpen,     setApplicationsOpen]     = useState(false);
@@ -675,6 +688,7 @@ export default function ContractorDashboard() {
                       onFind={handleFind}
                       onManageTrades={setManageSite}
                       onUpdatePhoto={setPhotoSite}
+                      onWorkPlan={setWorkPlanSite}
                       searchState={search?.loading ? search : null}
                     />
                   ))}
@@ -727,6 +741,12 @@ export default function ContractorDashboard() {
           site={photoSite}
           onClose={() => setPhotoSite(null)}
           onUpdated={handleTradesUpdated}
+        />
+      )}
+      {workPlanSite && (
+        <WorkPlanModal
+          siteId={workPlanSite._id}
+          onClose={() => setWorkPlanSite(null)}
         />
       )}
       {calendarPro && (

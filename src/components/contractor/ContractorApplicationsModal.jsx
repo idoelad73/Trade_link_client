@@ -18,7 +18,8 @@ const content = {
     close:         'Close',
     applied:        'Applied',
     proposedDate:   'Proposed date',
-    approvedToast:  (name) => `✅ Approval sent to ${name}`,
+    approvedToast:   (name) => `✅ Approval sent to ${name}`,
+    alreadyAssigned: 'That trade already booked for that date',
   },
   es: {
     badge:       '📬 Solicitudes de Trabajo',
@@ -34,7 +35,8 @@ const content = {
     close:         'Cerrar',
     applied:        'Aplicó',
     proposedDate:   'Fecha propuesta',
-    approvedToast:  (name) => `✅ Aprobación enviada a ${name}`,
+    approvedToast:   (name) => `✅ Aprobación enviada a ${name}`,
+    alreadyAssigned: 'Ese profesional ya está reservado para esa fecha',
   },
 };
 
@@ -63,14 +65,25 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
     if (approving) return;
     setApproving(app._id);
     try {
-      await approveApplication(app._id, undefined);
+      const { blockedApplicationIds = [] } = await approveApplication(app._id, undefined);
+
+      // Mark approved app as accepted; gray out all sibling IDs returned by server
+      const blockedSet = new Set(blockedApplicationIds);
       setApplications((prev) =>
-        prev.map((a) => a._id === app._id ? { ...a, status: 'accepted' } : a)
+        prev.map((a) => {
+          if (a._id === app._id)         return { ...a, status: 'accepted' };
+          if (blockedSet.has(String(a._id))) return { ...a, _alreadyBooked: true };
+          return a;
+        })
       );
       toast.success(t.approvedToast(app.tradePro?.fullName ?? ''));
       onApproved?.();
     } catch (err) {
-      console.error(err);
+      if (err?.response?.status === 409 && err.response.data?.alreadyAssigned) {
+        toast.error(t.alreadyAssigned, { duration: 4000 });
+      } else {
+        console.error(err);
+      }
     } finally {
       setApproving(null);
     }
@@ -170,26 +183,36 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                     </p>
 
                     {/* Accept flow */}
-                    {app.status === 'pending' && (
-                      <div className="px-4 pb-4 space-y-2">
-                        {app.scheduledDate && (
-                          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-sky-50 border border-sky-100">
-                            <span className="text-sky-500 text-sm">📅</span>
-                            <div>
-                              <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-wide">{t.proposedDate}</p>
-                              <p className="text-xs font-bold text-sky-700">{app.scheduledDate}</p>
+                    {(app.status === 'pending' || app._alreadyBooked) && (() => {
+                      // _alreadyBooked: flagged by server on load OR set client-side after in-session approval
+                      const taskTaken = !!app._alreadyBooked;
+                      return (
+                        <div className="px-4 pb-4 space-y-2">
+                          {app.scheduledDate && (
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-sky-50 border border-sky-100">
+                              <span className="text-sky-500 text-sm">📅</span>
+                              <div>
+                                <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-wide">{t.proposedDate}</p>
+                                <p className="text-xs font-bold text-sky-700">{app.scheduledDate}</p>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                        <button
-                          onClick={() => handleApprove(app)}
-                          disabled={!!approving}
-                          className="w-full py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-60 disabled:cursor-not-allowed transition shadow-sm"
-                        >
-                          {approving === app._id ? t.approving : t.approve}
-                        </button>
-                      </div>
-                    )}
+                          )}
+                          {taskTaken ? (
+                            <div className="w-full py-2 px-3 rounded-xl text-xs font-bold text-center text-slate-400 bg-slate-100 border border-slate-200">
+                              🔒 {t.alreadyAssigned}
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleApprove(app)}
+                              disabled={!!approving}
+                              className="w-full py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-60 disabled:cursor-not-allowed transition shadow-sm"
+                            >
+                              {approving === app._id ? t.approving : t.approve}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
