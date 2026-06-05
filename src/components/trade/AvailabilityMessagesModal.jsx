@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getMessages, approveMessage } from '../../api/trade.js';
 import useUIStore from '../../stores/uiStore.js';
+import { toast } from '../../utils/toast.js';
 
 const content = {
   en: {
@@ -21,6 +22,8 @@ const content = {
     appliedBadge:    '📋 Your Application',
     appliedTo:       'Applied to',
     appliedDate:     'Requested Start',
+    approveToast:    (company) => `✅ Availability confirmed — message sent back to ${company}`,
+    alreadyScheduled: 'Already scheduled for that day',
   },
   es: {
     badge:       '📬 Mensajes de Disponibilidad',
@@ -40,6 +43,8 @@ const content = {
     appliedBadge:    '📋 Tu Solicitud',
     appliedTo:       'Solicitado a',
     appliedDate:     'Inicio Solicitado',
+    approveToast:    (company) => `✅ Disponibilidad confirmada — mensaje enviado a ${company}`,
+    alreadyScheduled: 'Ya tienes trabajo ese día',
   },
 };
 
@@ -57,6 +62,14 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
   const [loading,    setLoading]    = useState(true);
   const [approving,  setApproving]  = useState(null); // message _id being approved
 
+  // Dates already confirmed — used to disable other pending messages for the same date
+  const approvedDates = new Set(
+    messages
+      .filter((m) => m.status === 'approved' && m.type !== 'approval' && m.senderType !== 'trade')
+      .map((m) => m.requestedDate)
+      .filter(Boolean)
+  );
+
   useEffect(() => {
     getMessages()
       .then(setMessages)
@@ -72,7 +85,8 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
       setMessages((prev) =>
         prev.map((m) => m._id === msg._id ? { ...m, status: 'approved' } : m)
       );
-      onApproved?.();
+      toast.success(t.approveToast(msg.contractor?.companyName || 'contractor'), { duration: 5000 });
+      onApproved?.(msg.requestedDate);
     } catch (err) {
       console.error(err);
     } finally {
@@ -210,17 +224,26 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
                     </div>
                   )}
 
-                  {!isApproval && !isMyApply && msg.status === 'pending' && (
-                    <div className="px-4 pb-4">
-                      <button
-                        onClick={() => handleApprove(msg)}
-                        disabled={!!approving}
-                        className="w-full py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-60 disabled:cursor-not-allowed transition shadow-sm"
-                      >
-                        {approving === msg._id ? t.approving : t.approve}
-                      </button>
-                    </div>
-                  )}
+                  {!isApproval && !isMyApply && msg.status === 'pending' && (() => {
+                    const dateConflict = msg.requestedDate && approvedDates.has(msg.requestedDate);
+                    return (
+                      <div className="px-4 pb-4">
+                        {dateConflict ? (
+                          <div className="w-full py-2 rounded-xl text-xs font-bold text-center text-slate-400 bg-slate-100 border border-slate-200">
+                            📅 {t.alreadyScheduled}
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleApprove(msg)}
+                            disabled={!!approving}
+                            className="w-full py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-60 disabled:cursor-not-allowed transition shadow-sm"
+                          >
+                            {approving === msg._id ? t.approving : t.approve}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <p className="px-4 pb-3 text-[10px] text-slate-300">
                     {new Date(msg.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}

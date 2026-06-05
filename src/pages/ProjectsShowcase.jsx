@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import Navbar from '../components/Navbar';
 import useUIStore from '../stores/uiStore';
 import { getPublicSites } from '../api/public.js';
@@ -15,6 +16,12 @@ const content = {
     trades:   'Trades needed',
     assigned: 'Assigned',
     cta:      'Register to apply →',
+    popup: {
+      title:   'No account yet',
+      text:    'Create a free Trade Professional account to apply for projects and connect with contractors.',
+      confirm: 'Register now →',
+      cancel:  'Maybe later',
+    },
   },
   es: {
     badge:    '🏗️ Proyectos Abiertos',
@@ -26,6 +33,12 @@ const content = {
     trades:   'Oficios necesarios',
     assigned: 'Asignado',
     cta:      'Regístrate para aplicar →',
+    popup: {
+      title:   'Aún no tienes cuenta',
+      text:    'Crea una cuenta gratuita de Profesional para postularte a proyectos y conectarte con contratistas.',
+      confirm: 'Registrarme →',
+      cancel:  'Quizás luego',
+    },
   },
 };
 
@@ -33,6 +46,29 @@ export default function ProjectsShowcase() {
   const navigate = useNavigate();
   const { lang } = useUIStore();
   const t = content[lang];
+
+  const handleProjectClick = async () => {
+    const result = await Swal.fire({
+      icon: 'info',
+      title: t.popup.title,
+      text:  t.popup.text,
+      confirmButtonText: t.popup.confirm,
+      showCancelButton:  true,
+      cancelButtonText:  t.popup.cancel,
+      confirmButtonColor: '#f59e0b',
+      cancelButtonColor:  '#94a3b8',
+      background: '#ffffff',
+      customClass: {
+        popup:         'rounded-3xl shadow-2xl',
+        title:         'text-slate-800 font-extrabold',
+        htmlContainer: 'text-slate-500',
+        confirmButton: 'rounded-xl font-bold px-6',
+        cancelButton:  'rounded-xl font-semibold px-6',
+      },
+      buttonsStyling: true,
+    });
+    if (result.isConfirmed) navigate('/register/trade');
+  };
 
   const [projects, setProjects] = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -85,7 +121,7 @@ export default function ProjectsShowcase() {
               return (
                 <div
                   key={project._id}
-                  onClick={() => navigate('/register/trade')}
+                  onClick={handleProjectClick}
                   className="group bg-white/80 backdrop-blur-sm rounded-3xl border border-amber-100 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-200 cursor-pointer overflow-hidden flex flex-col"
                 >
                   {/* Photo */}

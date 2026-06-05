@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { updateSchedule, findJobs, applyToJob } from '../../api/trade.js';
 import useUIStore from '../../stores/uiStore.js';
 import { toast } from '../../utils/toast.js';
@@ -155,16 +155,33 @@ function buildCalendar(year, month) {
   return cells;
 }
 
-export default function TradeSchedule({ initialBusyDays = [], initialBookings = [] }) {
+export default function TradeSchedule({ initialBusyDays = [], initialBookings = [], approvedDates = [] }) {
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
 
   const today = new Date();
-  const m1Y = today.getFullYear();
-  const m1M = today.getMonth();
-  const m2Date = new Date(m1Y, m1M + 1, 1);
-  const m2Y = m2Date.getFullYear();
-  const m2M = m2Date.getMonth();
+
+  const [viewYear,  setViewYear]  = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  const goPrev = () => {
+    setViewMonth((m) => {
+      if (m === 0) { setViewYear((y) => y - 1); return 11; }
+      return m - 1;
+    });
+  };
+  const goNext = () => {
+    setViewMonth((m) => {
+      if (m === 11) { setViewYear((y) => y + 1); return 0; }
+      return m + 1;
+    });
+  };
+
+  // Disable back-arrow at current month, forward arrow at current+1
+  const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth();
+  const maxMonth = today.getMonth() === 11 ? 0 : today.getMonth() + 1;
+  const maxYear  = today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear();
+  const isMaxMonth = viewYear === maxYear && viewMonth === maxMonth;
 
   const [busyDays,   setBusyDays]   = useState(() => new Set(initialBusyDays));
 
@@ -190,6 +207,17 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   const [selectedJobDate, setSelectedJobDate] = useState(null); // YYYY-MM-DD orange date
   const [hoveredJobId,    setHoveredJobId]    = useState(null);
   const [appliedDates,    setAppliedDates]    = useState(() => new Set()); // persisted after apply
+  const [pendingDates,    setPendingDates]    = useState(() => new Set()); // requiredDates from nearby jobs
+
+  // Merge dates approved via the messages modal into the orange calendar set
+  useEffect(() => {
+    if (!approvedDates.length) return;
+    setAppliedDates((prev) => {
+      const next = new Set(prev);
+      approvedDates.forEach((d) => d && next.add(d));
+      return next;
+    });
+  }, [approvedDates]);
 
   const handleFindJobs = useCallback(async () => {
     setJobsLoading(true);
@@ -201,6 +229,16 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
       setJobTrade(data.professionality);
       setMyHourlyRate(data.hourlyRate ?? null);
       setSelectedJobDate(null);
+      // Collect all requiredDates as orange pending markers on the calendar
+      const reqDates = new Set(data.results.map(r => r.tradeEntry?.requiredDate).filter(Boolean));
+      setPendingDates(reqDates);
+      // Auto-navigate to the month of the first required date
+      const firstRequired = [...reqDates][0];
+      if (firstRequired) {
+        const [ry, rm] = firstRequired.split('-');
+        setViewYear(parseInt(ry));
+        setViewMonth(parseInt(rm) - 1);
+      }
     } catch (err) {
       if (err?.response?.data?.message === 'no_location') {
         setJobError(t.noLocation);
@@ -213,12 +251,13 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   }, [distance, unit, t]);
 
   const handleApply = useCallback(async (job) => {
-    if (applyingId || !selectedJobDate) return;
+    if (applyingId) return;
     const te = job.tradeEntry;
+    const baseDate = te?.requiredDate || selectedJobDate;
+    if (!baseDate) return;
     const actualStart = (te?.budgetType === 'hours' && te?.totalHours)
-      ? getWorkingDaysRange(selectedJobDate, te.totalHours)[0]
-      : nextWorkingDay(selectedJobDate);
-    // Check for overlap with already-applied days
+      ? getWorkingDaysRange(baseDate, te.totalHours)[0]
+      : nextWorkingDay(baseDate);
     const previewRange = (te?.budgetType === 'hours' && te?.totalHours)
       ? getWorkingDaysRange(actualStart, te.totalHours)
       : [actualStart];
@@ -274,12 +313,8 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
 
   const renderMonth = (yr, mo) => {
     const cells = buildCalendar(yr, mo);
-    const isPastMonth = yr === m1Y && mo === m1M;
     return (
       <div>
-        <div className="flex items-center justify-between px-4 py-2 bg-sky-50/60 border-b border-sky-100">
-          <h3 className="text-sm font-extrabold text-sky-700 tracking-tight">{MONTHS[lang][mo]} {yr}</h3>
-        </div>
         <div className="grid grid-cols-7 px-3 pt-2 pb-1">
           {DAYS[lang].map((d) => (
             <div key={d} className="text-center text-xs font-bold text-slate-400 uppercase tracking-wide py-1">{d}</div>
@@ -289,7 +324,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
           {cells.map((day, i) => {
             if (!day) return <div key={`e-${i}`} />;
             const key          = toDateKey(yr, mo, day);
-            const isPast       = isPastMonth && day < today.getDate();
+            const isPast       = new Date(yr, mo, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
             const dbBooking    = bookingDateMap[key];
             const isBooked     = dbBooking?.status === 'booked' || (dbBooking && !dbBooking.status); // legacy = booked
             const isOrder      = dbBooking?.status === 'order';
@@ -298,45 +333,43 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             const isSelected   = key === selectedJobDate;
             const isApplied    = appliedDates.has(key);
             const isInRange    = !isApplied && !isOrder && rangeSet.has(key);
+            const isPending    = jobResults && pendingDates.has(key); // requiredDate from a nearby job
 
             const isNonWorking = !isWorkingDay(key);
 
             if (isPast) {
-              return <div key={key} className="w-full aspect-square rounded-xl bg-slate-100 flex items-center justify-center text-xs text-slate-300 font-medium select-none">{day}</div>;
+              return <div key={key} className="w-full aspect-square rounded-xl bg-slate-100 ring-1 ring-black/20 flex items-center justify-center text-xs text-slate-300 font-medium select-none">{day}</div>;
             }
 
             const handleDayClick = () => {
-              if (isBooked || isOrder || isApplied) return;
-              if (jobResults && !isOff) {
-                setSelectedJobDate((prev) => prev === key ? null : key);
-              } else {
-                toggleDay(yr, mo, day);
-              }
+              if (jobResults) return; // calendar is read-only in job-search mode
+              toggleDay(yr, mo, day);
             };
 
             return (
               <div key={key} className="relative group">
                 <button
                   onClick={handleDayClick}
-                  disabled={isBooked || isOrder || isApplied}
-                  className={`relative w-full aspect-square rounded-xl text-sm font-semibold flex items-center justify-center transition-all duration-150 active:scale-90 select-none
+                  className={`relative w-full aspect-square rounded-xl ring-1 ring-black/25 text-sm font-semibold flex items-center justify-center transition-all duration-150 active:scale-90 select-none
                     ${isBooked
-                      ? 'bg-red-700 text-white shadow-sm shadow-red-300 cursor-default'
-                      : isSelected
-                        ? 'bg-amber-400 text-white shadow-sm shadow-amber-200 ring-2 ring-amber-500 ring-offset-1 scale-105'
-                        : (isOrder || isApplied)
-                          ? 'bg-amber-400 text-white shadow-sm shadow-amber-200 cursor-default'
-                          : isInRange
-                            ? 'bg-amber-300 text-white shadow-sm shadow-amber-100'
-                            : isOff
-                              ? 'bg-red-300 text-white shadow-sm shadow-red-100 hover:bg-red-400'
-                              : isNonWorking
-                                ? 'bg-emerald-200 text-emerald-700 shadow-sm hover:bg-emerald-300'
-                                : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
-                    ${isToday && !isSelected ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}
+                      ? 'bg-red-400 text-white shadow-sm shadow-red-200 cursor-default'
+                      : (isOrder || isApplied)
+                        ? 'bg-amber-400 text-white shadow-sm shadow-amber-200 cursor-default'
+                        : isPending
+                          ? 'bg-amber-400 text-white shadow-sm shadow-amber-200 ring-2 ring-amber-500 ring-offset-1'
+                          : isSelected
+                            ? 'bg-amber-400 text-white shadow-sm shadow-amber-200 ring-2 ring-amber-500 ring-offset-1 scale-105'
+                            : isInRange
+                              ? 'bg-amber-300 text-white shadow-sm shadow-amber-100'
+                              : isOff
+                                ? 'bg-red-300 text-white shadow-sm shadow-red-100'
+                                : isNonWorking
+                                  ? 'bg-emerald-200 text-emerald-700 shadow-sm'
+                                  : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
+                    ${isToday && !isSelected && !isPending ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}
                 >
                   {day}
-                  {(isBooked || isOrder || isApplied) && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/80" />}
+                  {(isBooked || isOrder || isApplied || isPending) && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/80" />}
                   {isToday && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/80" />}
                 </button>
                 {dbBooking && (
@@ -375,26 +408,32 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
       {/* Calendar */}
       <div className="bg-white/80 backdrop-blur-sm rounded-3xl border border-sky-100 shadow-md overflow-hidden">
 
-        <div className="px-6 py-4 bg-gradient-to-r from-sky-500 to-sky-400">
-          <h2 className="text-white font-extrabold text-lg tracking-tight text-center">
-            {MONTHS[lang][m1M]} – {MONTHS[lang][m2M]} {m2Y}
+        <div className="px-4 py-3 bg-gradient-to-r from-sky-500 to-sky-400 flex items-center justify-between">
+          <button
+            onClick={goPrev}
+            disabled={isCurrentMonth}
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/20 hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold text-lg transition"
+          >‹</button>
+          <h2 className="text-white font-extrabold text-lg tracking-tight">
+            {MONTHS[lang][viewMonth]} {viewYear}
           </h2>
+          <button
+            onClick={goNext}
+            disabled={isMaxMonth}
+            className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/20 hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed text-white font-bold text-lg transition"
+          >›</button>
         </div>
 
         <div className="flex items-center gap-3 px-3 sm:px-6 py-2 sm:py-3 border-b border-sky-50 bg-sky-50/40 overflow-x-auto scrollbar-none flex-nowrap">
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.free}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-300" /><span className="text-xs text-slate-500 font-medium">{t.legend.busy}</span></div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-700" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full border-2 border-sky-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.today}</span></div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-400" /><span className="text-xs text-slate-500 font-medium">{t.legendPending}</span></div>
-          {jobResults && <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-300" /><span className="text-xs text-slate-500 font-medium">{t.legendSelected}</span></div>}
-          <span className="text-xs text-slate-400 ml-auto">{jobResults ? t.pickDateFirst : t.hint}</span>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-400" /><span className="text-xs text-slate-500 font-medium">{jobResults ? 'Job Date' : t.legendPending}</span></div>
+          <span className="text-xs text-slate-400 ml-auto">{jobResults ? '' : t.hint}</span>
         </div>
 
-        <div className="flex gap-0 divide-x divide-sky-100 overflow-x-auto">
-          <div className="flex-1 min-w-[160px]">{renderMonth(m1Y, m1M)}</div>
-          <div className="flex-1 min-w-[160px]">{renderMonth(m2Y, m2M)}</div>
-        </div>
+        <div>{renderMonth(viewYear, viewMonth)}</div>
 
         <div className="px-6 pb-5">
           {dirty || saved ? (
@@ -524,14 +563,23 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                           💵 {te.totalHours}h × ${myHourlyRate} = ${te.totalHours * myHourlyRate}
                         </span>
                       )}
+                      {te && te.requiredDate && (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 border border-sky-100">
+                          📅 {te.requiredDate.split('-').reverse().slice(0, 2).reverse().join('/')}
+                        </span>
+                      )}
                     </div>
 
                     {/* Apply button */}
                     <div className="px-4 pb-4 space-y-1.5">
-                      {!selectedJobDate && (
-                        <p className="text-[11px] text-amber-500 font-medium text-center">{t.pickDateFirst}</p>
+                      {te?.requiredDate ? (
+                        <p className="text-[11px] text-amber-600 font-semibold text-center">📅 {te.requiredDate}</p>
+                      ) : (
+                        !selectedJobDate && (
+                          <p className="text-[11px] text-amber-500 font-medium text-center">{t.pickDateFirst}</p>
+                        )
                       )}
-                      {selectedJobDate && (() => {
+                      {!te?.requiredDate && selectedJobDate && (() => {
                         const isHours = te?.budgetType === 'hours' && te?.totalHours;
                         const range   = isHours ? getWorkingDaysRange(selectedJobDate, te.totalHours) : null;
                         const start   = range ? range[0] : nextWorkingDay(selectedJobDate);
@@ -552,7 +600,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                       })()}
                       <button
                         onClick={() => handleApply(job)}
-                        disabled={!!applyingId || !selectedJobDate}
+                        disabled={!!applyingId || !(te?.requiredDate || selectedJobDate)}
                         className="w-full py-2.5 rounded-xl text-xs font-bold transition-all active:scale-[0.99] bg-gradient-to-r from-amber-500 to-sky-500 hover:from-amber-400 hover:to-sky-400 text-white shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {applyingId === job._id ? (

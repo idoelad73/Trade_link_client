@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import Navbar from '../components/Navbar';
 import useUIStore from '../stores/uiStore';
 import { getPublicTradePros } from '../api/public.js';
@@ -14,6 +15,12 @@ const content = {
     rate:     '/hr',
     noRate:   'Rate on request',
     cta:      'Register to hire →',
+    popup: {
+      title:   'No account yet',
+      text:    'Create a free Contractor account to hire trade professionals and manage your projects.',
+      confirm: 'Register now →',
+      cancel:  'Maybe later',
+    },
   },
   es: {
     badge:    '🔧 Nuestros Profesionales',
@@ -24,6 +31,12 @@ const content = {
     rate:     '/hr',
     noRate:   'Tarifa a consultar',
     cta:      'Regístrate para contratar →',
+    popup: {
+      title:   'Aún no tienes cuenta',
+      text:    'Crea una cuenta gratuita de Contratista para contratar profesionales y gestionar tus proyectos.',
+      confirm: 'Registrarme →',
+      cancel:  'Quizás luego',
+    },
   },
 };
 
@@ -31,6 +44,29 @@ export default function TradesShowcase() {
   const navigate = useNavigate();
   const { lang } = useUIStore();
   const t = content[lang];
+
+  const handleProClick = async () => {
+    const result = await Swal.fire({
+      icon: 'info',
+      title: t.popup.title,
+      text:  t.popup.text,
+      confirmButtonText: t.popup.confirm,
+      showCancelButton:  true,
+      cancelButtonText:  t.popup.cancel,
+      confirmButtonColor: '#0ea5e9',
+      cancelButtonColor:  '#94a3b8',
+      background: '#ffffff',
+      customClass: {
+        popup:         'rounded-3xl shadow-2xl',
+        title:         'text-slate-800 font-extrabold',
+        htmlContainer: 'text-slate-500',
+        confirmButton: 'rounded-xl font-bold px-6',
+        cancelButton:  'rounded-xl font-semibold px-6',
+      },
+      buttonsStyling: true,
+    });
+    if (result.isConfirmed) navigate('/register/contractor');
+  };
 
   const [pros,    setPros]    = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +109,7 @@ export default function TradesShowcase() {
             {pros.map((pro, i) => (
               <div
                 key={pro._id}
-                onClick={() => navigate('/register/contractor')}
+                onClick={handleProClick}
                 className="group bg-white/80 backdrop-blur-sm rounded-2xl border border-sky-100 shadow-sm hover:shadow-md hover:border-sky-300 transition-all duration-200 cursor-pointer flex items-center gap-4 px-4 py-3"
               >
                 {/* Index */}

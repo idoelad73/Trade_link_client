@@ -126,12 +126,15 @@ function ProCard({ pro, unit, t, siteName, tradeEntry = {}, onOpenCalendar }) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-slate-800 text-sm truncate">{pro.fullName}</p>
-          <p className="text-xs text-slate-400 truncate">📍 {pro.address}</p>
+          {siteBooking
+            ? <p className="text-xs text-slate-400 truncate">📍 {pro.address}</p>
+            : <p className="text-xs text-slate-300 italic truncate">Address visible after booking</p>
+          }
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           {siteBooking ? (
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200 whitespace-nowrap">
-              ✅ {formatBookingDate(siteBooking.date)}
+              ✅ {formatBookingDate(siteBooking.dates?.[0])}
             </span>
           ) : (
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${busy ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
@@ -171,11 +174,18 @@ function ProCard({ pro, unit, t, siteName, tradeEntry = {}, onOpenCalendar }) {
   );
 }
 
+function fmtDate(dateKey) {
+  if (!dateKey) return null;
+  const [y, m, d] = dateKey.split('-');
+  return `${m}/${d}/${y}`;
+}
+
 // ── Site card with per-site trade picker ─────────────────────────────────────
 function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, onManageTrades, onUpdatePhoto, searchState }) {
   const statusLabel   = t.status[site.status] ?? site.status;
   const isSearching   = searchState?.loading;
   const hasNoTrades   = !site.tradesNeeded?.length;
+  const hasAssigned   = site.tradesNeeded?.some((tr) => tr.assigned);
 
   return (
     <div className={`bg-white/80 backdrop-blur-sm rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col ${
@@ -228,7 +238,7 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
           </span>
         </div>
 
-        <p className="text-xs text-slate-500 mb-3 leading-relaxed">📍 {site.address}</p>
+        {hasAssigned && <p className="text-xs text-slate-500 mb-3 leading-relaxed">📍 {site.address}</p>}
 
         {/* Per-site trade picker */}
         {!hasNoTrades && (
@@ -236,36 +246,52 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
               {t.findTrade.tradesLabel}
             </p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {site.tradesNeeded.map((tr) => {
-                const isSelected  = selectedTrade === tr.name;
-                const isAssigned  = tr.assigned;
+                const isSelected = selectedTrade === tr.name;
+                const isAssigned = tr.assigned;
+                const dateLabel  = fmtDate(tr.requiredDate);
                 return (
                   <button
                     key={tr.name}
                     type="button"
                     disabled={isAssigned}
                     onClick={() => !isAssigned && onSelectTrade(site._id, isSelected ? null : tr.name)}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border-2 transition-all duration-150 active:scale-95 ${
+                    className={`flex flex-col items-start gap-1 px-2.5 py-2 rounded-xl border-2 text-xs font-semibold transition-all duration-150 active:scale-95 ${
                       isAssigned
-                        ? 'bg-orange-400 border-orange-400 text-white shadow shadow-orange-100 cursor-not-allowed opacity-90'
+                        ? 'bg-orange-400 border-orange-400 text-white shadow shadow-orange-100 cursor-not-allowed'
                         : isSelected
                           ? 'bg-orange-500 border-orange-500 text-white shadow shadow-orange-200'
-                          : 'bg-white border-amber-200 text-amber-700 hover:border-orange-300 hover:text-orange-600'
+                          : 'bg-white border-amber-200 text-amber-700 hover:border-orange-300 hover:bg-orange-50'
                     }`}
                   >
-                    {isAssigned && <span>✓</span>}
-                    <span>{tr.name}</span>
-                    {tr.budgetType === 'amount' && tr.maxAmount && (
-                      <span className={`font-bold px-1 py-0.5 rounded text-[10px] ${isAssigned || isSelected ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
-                        ${tr.maxAmount}
+                    {/* Row 1: name */}
+                    <span className="flex items-center gap-1 leading-none">
+                      {isAssigned && <span className="text-[10px]">✓</span>}
+                      {tr.name}
+                    </span>
+                    {/* Row 2: budget + date badges — always shown */}
+                    <span className="flex items-center gap-1 flex-wrap">
+                        {tr.budgetType === 'amount' && tr.maxAmount && (
+                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'bg-white/25 text-white' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+                            💰 ${tr.maxAmount}
+                          </span>
+                        )}
+                        {tr.budgetType === 'hours' && tr.totalHours && (
+                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'bg-white/25 text-white' : 'bg-violet-50 text-violet-600 border border-violet-200'}`}>
+                            ⏱ {tr.totalHours}h
+                          </span>
+                        )}
+                        {dateLabel ? (
+                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'bg-white/25 text-white' : 'bg-sky-50 text-sky-600 border border-sky-200'}`}>
+                            📅 {dateLabel}
+                          </span>
+                        ) : (
+                          <span className={`px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'text-white/50' : 'text-slate-300 border border-dashed border-slate-200'}`}>
+                            📅 –
+                          </span>
+                        )}
                       </span>
-                    )}
-                    {tr.budgetType === 'hours' && tr.totalHours && (
-                      <span className={`font-bold px-1 py-0.5 rounded text-[10px] ${isAssigned || isSelected ? 'bg-white/20 text-white' : 'bg-violet-50 text-violet-600 border border-violet-200'}`}>
-                        {tr.totalHours}h
-                      </span>
-                    )}
                   </button>
                 );
               })}
@@ -440,7 +466,7 @@ function SearchResults({ search, unit, t, onClose, onOpenCalendar }) {
               <ProCard key={pro._id} pro={pro} unit={unit} t={tr}
                 siteName={search.siteName}
                 tradeEntry={search.tradeEntry}
-                onOpenCalendar={(id) => onOpenCalendar(id, search.siteName, search.siteAddress, search.siteId)} />
+                onOpenCalendar={(id) => onOpenCalendar(id, search.siteName, search.siteAddress, search.siteId, search.requiredDate)} />
             ))}
           </div>
         )}
@@ -540,7 +566,7 @@ export default function ContractorDashboard() {
     setTimeout(() => document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     try {
       const data = await findTradesForSite(site._id, trade, distance, unit, maxRate < MAX_RATE ? maxRate : null);
-      setSearch({ siteId: site._id, siteName: site.name, siteAddress: site.address, trade, tradeEntry, loading: false, results: data.results });
+      setSearch({ siteId: site._id, siteName: site.name, siteAddress: site.address, trade, tradeEntry, loading: false, results: data.results, requiredDate: data.requiredDate ?? null });
     } catch (err) {
       const noLocation = err?.response?.status === 422;
       setSearch({ siteName: site.name, trade, loading: false, results: [], noLocation, error: !noLocation });
@@ -576,6 +602,7 @@ export default function ContractorDashboard() {
           </div>
 
           <div className="flex items-center gap-2 pl-2 sm:pl-4 border-l border-slate-100 flex-shrink-0">
+
             <button
               onClick={() => setApplicationsOpen(true)}
               className="flex items-center gap-1.5 rounded-xl hover:bg-amber-50 px-1.5 sm:px-2 py-1 transition group"
@@ -668,7 +695,7 @@ export default function ContractorDashboard() {
                       unit={unit}
                       t={t}
                       onClose={() => setSearch(null)}
-                      onOpenCalendar={(proId, siteName, siteAddress, siteId) => setCalendarPro({ proId, siteName, siteAddress, siteId })}
+                      onOpenCalendar={(proId, siteName, siteAddress, siteId, requiredDate) => setCalendarPro({ proId, siteName, siteAddress, siteId, requiredDate })}
                     />
                   </div>
                 )}
@@ -708,6 +735,7 @@ export default function ContractorDashboard() {
           siteName={calendarPro.siteName}
           siteAddress={calendarPro.siteAddress}
           siteId={calendarPro.siteId}
+          requiredDate={calendarPro.requiredDate ?? null}
           mySiteNames={sites.map((s) => s.name)}
           onClose={() => setCalendarPro(null)}
         />

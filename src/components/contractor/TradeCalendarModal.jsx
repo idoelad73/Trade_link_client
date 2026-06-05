@@ -74,19 +74,23 @@ function formatDisplay(dateKey, lang) {
   });
 }
 
-export default function TradeCalendarModal({ tradeId, siteName, siteAddress, siteId, mySiteNames = [], onClose }) {
+export default function TradeCalendarModal({ tradeId, siteName, siteAddress, siteId, mySiteNames = [], requiredDate = null, onClose }) {
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
 
   const today    = new Date();
   const todayKey = toDateKey(today.getFullYear(), today.getMonth(), today.getDate());
 
-  const [year,        setYear]        = useState(today.getFullYear());
-  const [month,       setMonth]       = useState(today.getMonth());
+  // If a requiredDate is passed, open the calendar on that month and pre-select the date
+  const initYear  = requiredDate ? parseInt(requiredDate.split('-')[0])     : today.getFullYear();
+  const initMonth = requiredDate ? parseInt(requiredDate.split('-')[1]) - 1 : today.getMonth();
+
+  const [year,        setYear]        = useState(initYear);
+  const [month,       setMonth]       = useState(initMonth);
   const [pro,         setPro]         = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [fetchError,  setFetchError]  = useState(false);
-  const [selectedKey, setSelectedKey] = useState(null);
+  const [selectedKey, setSelectedKey] = useState(requiredDate ?? null);
   const [sending,       setSending]       = useState(false);
   const [sent,          setSent]          = useState(false);
   const [sendError,     setSendError]     = useState('');
@@ -110,8 +114,11 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
 
   const busySet    = new Set(pro?.busyDays ?? []);
-  // bookingMap: date → { siteName, siteAddress }
-  const bookingMap = Object.fromEntries((pro?.bookings ?? []).map((b) => [b.date, b]));
+  // bookingMap: date → booking entry (each booking can span multiple dates)
+  const bookingMap = {};
+  for (const b of (pro?.bookings ?? [])) {
+    for (const d of (b.dates ?? [])) bookingMap[d] = b;
+  }
   const cells      = buildCalendar(year, month);
 
   const handleDayClick = (day) => {
@@ -201,7 +208,7 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
               <div className="flex items-center gap-3 px-6 py-2.5 border-b border-sky-50 bg-sky-50/40 flex-wrap">
                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.free}</span></div>
                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-300" /><span className="text-xs text-slate-500 font-medium">{t.legend.busy}</span></div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-600" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-500" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full border-2 border-sky-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.today}</span></div>
                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.selected}</span></div>
               </div>
@@ -226,13 +233,12 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
                     <div key={key} className="relative group">
                       <button
                         type="button"
-                        onClick={() => !booking && handleDayClick(day)}
-                        disabled={!!booking}
+                        onClick={() => handleDayClick(day)}
                         className={`w-full aspect-square rounded-xl text-sm font-semibold flex items-center justify-center transition-all duration-150 active:scale-90 select-none
                           ${isSelected
                             ? 'bg-amber-400 text-white shadow-md shadow-amber-200 scale-105'
                             : booking
-                              ? 'bg-red-700 text-white shadow-sm shadow-red-300 cursor-default'
+                              ? 'bg-amber-500 text-white shadow-sm shadow-amber-200 hover:bg-amber-600'
                               : isOff
                                 ? 'bg-red-300 text-white shadow-sm shadow-red-100 hover:bg-red-400'
                                 : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}

@@ -39,7 +39,7 @@ export default function PonsLanding() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-yellow-50 to-amber-50 font-sans text-slate-800 overflow-x-hidden relative">
 
-      <Navbar />
+      <Navbar showLogin />
 
       {/* Hero */}
       <section className="relative flex flex-col items-center justify-center text-center px-6 pt-16 pb-28 overflow-x-hidden">

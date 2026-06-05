@@ -44,6 +44,7 @@ export default function TradeDashboard() {
   const [messagesOpen,  setMessagesOpen]  = useState(false);
   const [tradeData,     setTradeData]     = useState(null);
   const [dataLoading,   setDataLoading]   = useState(true);
+  const [approvedDates, setApprovedDates] = useState([]);
 
   useEffect(() => {
     getMe().then(setTradeData).catch(console.error).finally(() => setDataLoading(false));
@@ -159,6 +160,7 @@ export default function TradeDashboard() {
               <TradeSchedule
                 initialBusyDays={tradeData?.busyDays || []}
                 initialBookings={tradeData?.bookings || []}
+                approvedDates={approvedDates}
               />
             )}
           </div>
@@ -169,7 +171,10 @@ export default function TradeDashboard() {
       {messagesOpen   && (
         <AvailabilityMessagesModal
           onClose={() => setMessagesOpen(false)}
-          onApproved={() => getMe().then(setTradeData).catch(console.error)}
+          onApproved={(date) => {
+            getMe().then(setTradeData).catch(console.error);
+            if (date) setApprovedDates((prev) => [...prev, date]);
+          }}
         />
       )}
     </div>
