@@ -779,20 +779,34 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
         // bk comes from initialBookings which has: siteId, siteName, siteAddress, dates, status
         // We don't have contractorId in bookings, so we'll use siteId to look it up.
         // For now pass siteId as a proxy — the server resolves it from the chat record.
+        const sharedProps = {
+          contractorId:    chatContractorId,
+          tradeProId:      String(userId),
+          siteId:          String(bk.siteId ?? ''),
+          siteName:        bk.siteName,
+          userType:        'trade',
+          initialMessages: chatHistory,
+          uploadFn:        tradeUploadChatFile,
+          onClose: () => { setChatOpen(false); setChatHistory([]); setChatContractorId(''); },
+        };
         return (
-          <div className="fixed inset-0 z-50 pointer-events-none">
-            <ChatPanel
-              contractorId={chatContractorId}
-              tradeProId={String(userId)}
-              siteId={String(bk.siteId ?? '')}
-              siteName={bk.siteName}
-              userType="trade"
-              initialMessages={chatHistory}
-              uploadFn={tradeUploadChatFile}
-              onClose={() => { setChatOpen(false); setChatHistory([]); setChatContractorId(''); }}
-              className="absolute bottom-4 left-4 pointer-events-auto"
-              style={{ width: 'min(50vw, 380px)', height: 'min(30vh, 240px)' }}
-            />
+          <div className="fixed inset-0 z-50">
+            {/* Mobile — full-screen slide up from bottom */}
+            <div className="sm:hidden absolute inset-0 bg-black/40 backdrop-blur-sm flex flex-col justify-end">
+              <ChatPanel
+                {...sharedProps}
+                className="rounded-t-3xl rounded-b-none border-b-0"
+                style={{ height: '72dvh' }}
+              />
+            </div>
+            {/* Desktop — floating bottom-left */}
+            <div className="hidden sm:block pointer-events-none absolute inset-0">
+              <ChatPanel
+                {...sharedProps}
+                className="absolute bottom-4 left-4 pointer-events-auto"
+                style={{ width: 'min(50vw, 380px)', height: 'min(36vh, 320px)' }}
+              />
+            </div>
           </div>
         );
       })()}
