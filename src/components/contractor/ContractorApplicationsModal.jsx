@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getApplications, approveApplication } from '../../api/contractor.js';
+import { getApplications, approveApplication, approveReschedule, declineReschedule } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
 import { toast } from '../../utils/toast.js';
 
@@ -45,12 +45,17 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
   const t    = content[lang];
 
   const [applications,  setApplications]  = useState([]);
+  const [reschedules,   setReschedules]   = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [approving,     setApproving]     = useState(null);
+  const [actingReschedule, setActingReschedule] = useState(null); // id being approved/declined
 
   useEffect(() => {
     getApplications()
-      .then(setApplications)
+      .then(({ applications: apps = [], reschedules: resc = [] }) => {
+        setApplications(apps);
+        setReschedules(resc);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -216,6 +221,79 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* ── Reschedule requests from trade pros ──────────────────────── */}
+          {reschedules.length > 0 && (
+            <div className="mt-5 space-y-3">
+              <p className="text-xs font-bold text-violet-500 uppercase tracking-wide px-1">
+                📅 Reschedule Requests
+              </p>
+              {reschedules.map((msg) => (
+                <div key={msg._id} className="bg-white rounded-2xl border border-violet-200 shadow-sm overflow-hidden">
+                  <div className="h-1 w-full bg-gradient-to-r from-violet-400 to-sky-400" />
+                  {/* Trade pro info */}
+                  <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-slate-50">
+                    {msg.tradePro?.photo
+                      ? <img src={msg.tradePro.photo} alt={msg.tradePro.fullName} className="w-11 h-11 rounded-xl object-cover flex-shrink-0 border border-slate-100" />
+                      : <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-50 to-sky-50 flex items-center justify-center text-xl flex-shrink-0">🔧</div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="font-extrabold text-slate-800 text-sm truncate">{msg.tradePro?.fullName}</p>
+                      <p className="text-xs text-slate-400 truncate">🔧 {msg.tradePro?.professionality}</p>
+                    </div>
+                    <span className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-100 text-violet-600 border border-violet-200">
+                      Reschedule
+                    </span>
+                  </div>
+                  {/* Details */}
+                  <div className="px-4 py-3 grid grid-cols-2 gap-2">
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Project</p>
+                      <p className="text-xs font-bold text-slate-700 truncate">🏗️ {msg.site?.name}</p>
+                    </div>
+                    <div className="bg-violet-50 border border-violet-100 rounded-xl px-3 py-2">
+                      <p className="text-[10px] font-semibold text-violet-400 uppercase tracking-wide mb-0.5">Requested Date</p>
+                      <p className="text-xs font-bold text-violet-700">📅 {msg.requestedDate}</p>
+                    </div>
+                  </div>
+                  {/* Actions */}
+                  <div className="px-4 pb-4 flex gap-2">
+                    <button
+                      onClick={async () => {
+                        setActingReschedule(msg._id + '_approve');
+                        try {
+                          await approveReschedule(msg._id);
+                          setReschedules(prev => prev.filter(m => m._id !== msg._id));
+                          toast.success(`✅ Schedule updated for ${msg.tradePro?.fullName}`);
+                          onApproved?.();
+                        } catch { toast.error('Error'); }
+                        finally { setActingReschedule(null); }
+                      }}
+                      disabled={!!actingReschedule}
+                      className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-60 transition shadow-sm"
+                    >
+                      {actingReschedule === msg._id + '_approve' ? '…' : '✓ Approve'}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        setActingReschedule(msg._id + '_decline');
+                        try {
+                          await declineReschedule(msg._id);
+                          setReschedules(prev => prev.filter(m => m._id !== msg._id));
+                          toast.success('Request declined');
+                        } catch { toast.error('Error'); }
+                        finally { setActingReschedule(null); }
+                      }}
+                      disabled={!!actingReschedule}
+                      className="flex-1 py-2 rounded-xl text-xs font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 disabled:opacity-60 transition"
+                    >
+                      {actingReschedule === msg._id + '_decline' ? '…' : '✕ Decline'}
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

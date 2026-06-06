@@ -35,7 +35,7 @@ export default function Navbar({ showLogin = false }) {
 
   return (
     <>
-      <nav className="flex items-center justify-between px-8 py-5 bg-white/70 backdrop-blur-md border-b border-yellow-100 sticky top-0 z-50 shadow-sm">
+      <nav className="flex items-center justify-between px-4 sm:px-8 py-5 bg-white/70 backdrop-blur-md border-b border-yellow-100 sticky top-0 z-50 shadow-sm">
 
         {/* Logo */}
         <div className="flex items-center gap-2">
@@ -53,11 +53,11 @@ export default function Navbar({ showLogin = false }) {
             <div ref={menuRef} className="relative">
               <button
                 onClick={() => setShowLoginMenu((v) => !v)}
-                className="flex items-center gap-1.5 bg-white border border-sky-200 hover:border-sky-400 text-sky-700 text-sm font-semibold rounded-xl px-4 py-2 shadow-sm hover:shadow-md transition-all duration-150"
+                className="flex items-center gap-1 bg-white border border-sky-200 hover:border-sky-400 text-sky-700 text-xs sm:text-sm font-semibold rounded-xl px-2.5 py-1.5 sm:px-4 sm:py-2 shadow-sm hover:shadow-md transition-all duration-150"
               >
                 {m.button}
                 <svg
-                  className={`w-3.5 h-3.5 text-sky-400 transition-transform duration-200 ${showLoginMenu ? 'rotate-180' : ''}`}
+                  className={`w-3 h-3 sm:w-3.5 sm:h-3.5 text-sky-400 transition-transform duration-200 ${showLoginMenu ? 'rotate-180' : ''}`}
                   fill="none" stroke="currentColor" viewBox="0 0 24 24"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />

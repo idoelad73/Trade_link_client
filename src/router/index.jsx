@@ -21,6 +21,7 @@ import TradeRegister from '../pages/register/TradeRegister';
 import ContractorRegister from '../pages/register/ContractorRegister';
 import ContractorDashboard from '../pages/dashboard/ContractorDashboard';
 import TradeDashboard from '../pages/dashboard/TradeDashboard';
+import WorkPlanPage from '../pages/dashboard/WorkPlanPage';
 import ProjectsShowcase from '../pages/ProjectsShowcase';
 import TradesShowcase from '../pages/TradesShowcase';
 
@@ -36,8 +37,9 @@ const router = createBrowserRouter(
       <Route path="/register/contractor" element={<ContractorRegister />} />
 
       {/* Dashboards */}
-      <Route path="/dashboard/contractor" element={<ContractorDashboard />} />
-      <Route path="/dashboard/trade"      element={<TradeDashboard />} />
+      <Route path="/dashboard/contractor"                   element={<ContractorDashboard />} />
+      <Route path="/dashboard/contractor/work-plan/:siteId" element={<WorkPlanPage />} />
+      <Route path="/dashboard/trade"                        element={<TradeDashboard />} />
 
       {/* Auth — uncomment when pages are built */}
       {/* <Route element={<AuthLayout />}>

@@ -1,7 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
-import { updateSchedule, findJobs, applyToJob } from '../../api/trade.js';
+import { updateSchedule, findJobs, applyToJob, requestReschedule, removeBooking, getTradeChatBySite, uploadChatFile as tradeUploadChatFile } from '../../api/trade.js';
 import useUIStore from '../../stores/uiStore.js';
+import useAuthStore from '../../stores/authStore.js';
 import { toast } from '../../utils/toast.js';
+import ChatPanel from '../shared/ChatPanel.jsx';
 
 // ── Working-day helpers ────────────────────────────────────────────────────────
 const _hCache = {};
@@ -208,6 +210,16 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   const [hoveredJobId,    setHoveredJobId]    = useState(null);
   const [appliedDates,    setAppliedDates]    = useState(() => new Set()); // persisted after apply
   const [pendingDates,    setPendingDates]    = useState(() => new Set()); // requiredDates from nearby jobs
+  const [activeBookedKey,  setActiveBookedKey]  = useState(null);
+  const [chatOpen,         setChatOpen]         = useState(false);
+  const [chatMessage,      setChatMessage]      = useState('');
+  const [chatHistory,      setChatHistory]      = useState([]);
+  const [chatContractorId, setChatContractorId] = useState('');
+  const userId = useAuthStore((s) => s.user?._id ?? s.user?.id ?? '');
+  const [rescheduleMode,   setRescheduleMode]   = useState(false);   // calendar in reschedule-pick mode
+  const [rescheduleNewKey, setRescheduleNewKey] = useState(null);    // newly picked date key
+  const [rescheduling,     setRescheduling]     = useState(false);   // API in-flight
+  const [deleting,         setDeleting]         = useState(false);   // delete in-flight
 
   // Merge dates approved via the messages modal into the orange calendar set
   useEffect(() => {
@@ -325,7 +337,8 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             const isSelected   = key === selectedJobDate;
             const isApplied    = appliedDates.has(key);
             const isInRange    = !isApplied && !isOrder && rangeSet.has(key);
-            const isPending    = jobResults && pendingDates.has(key); // requiredDate from a nearby job
+            const isPending       = jobResults && pendingDates.has(key);
+            const isRescheduleNew = rescheduleMode && key === rescheduleNewKey;
 
             const isNonWorking = !isWorkingDay(key);
 
@@ -334,7 +347,19 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             }
 
             const handleDayClick = () => {
-              if (jobResults) return; // calendar is read-only in job-search mode
+              if (isBooked) {
+                setActiveBookedKey((prev) => prev === key ? null : key);
+                setChatOpen(false);
+                setRescheduleMode(false);
+                setRescheduleNewKey(null);
+                return;
+              }
+              // In reschedule mode, green days become the new-date selection
+              if (rescheduleMode && !isOff && !isApplied && !isOrder) {
+                setRescheduleNewKey((prev) => prev === key ? null : key);
+                return;
+              }
+              if (jobResults) return;
               toggleDay(yr, mo, day);
             };
 
@@ -344,7 +369,9 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                   onClick={handleDayClick}
                   className={`relative w-full aspect-square rounded-xl ring-1 ring-black/25 text-sm font-semibold flex items-center justify-center transition-all duration-150 active:scale-90 select-none
                     ${isBooked
-                      ? 'bg-red-400 text-white shadow-sm shadow-red-200 cursor-default'
+                      ? `bg-red-400 text-white shadow-sm shadow-red-200 cursor-pointer ${activeBookedKey === key ? 'ring-2 ring-offset-1 ring-red-600 scale-105' : 'hover:bg-red-500'}`
+                      : isRescheduleNew
+                        ? 'bg-violet-500 text-white shadow-sm shadow-violet-200 ring-2 ring-violet-600 ring-offset-1 scale-105'
                       : (isOrder || isApplied)
                         ? 'bg-amber-400 text-white shadow-sm shadow-amber-200 cursor-default'
                         : isPending
@@ -431,6 +458,135 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
         </div>
 
         <div>{renderMonth(viewYear, viewMonth)}</div>
+
+        {/* Booked-day action strip — appears when a red day is tapped */}
+        {activeBookedKey && bookingDateMap[activeBookedKey] && (() => {
+          const bk = bookingDateMap[activeBookedKey];
+
+          const handleRescheduleConfirm = async () => {
+            if (!rescheduleNewKey || rescheduling) return;
+            setRescheduling(true);
+            try {
+              await requestReschedule(bk.siteId, rescheduleNewKey);
+              toast.success(`📅 Reschedule request sent for ${bk.siteName}`, { duration: 5000 });
+              setRescheduleMode(false);
+              setRescheduleNewKey(null);
+            } catch (err) {
+              if (err?.response?.status === 409) {
+                toast.warning('That date is already busy on your calendar', { duration: 4000 });
+              } else {
+                toast.error('Failed to send request', { duration: 4000 });
+              }
+            } finally { setRescheduling(false); }
+          };
+
+          const handleDelete = async () => {
+            if (deleting) return;
+            if (!window.confirm(`Remove your booking for "${bk.siteName}"?`)) return;
+            setDeleting(true);
+            try {
+              await removeBooking(bk.siteId);
+              toast.success(`Booking removed for ${bk.siteName}`, { duration: 4000 });
+              setActiveBookedKey(null);
+              setRescheduleMode(false);
+              setRescheduleNewKey(null);
+            } catch { toast.error('Failed to remove booking', { duration: 4000 }); }
+            finally { setDeleting(false); }
+          };
+
+          return (
+            <div className="mx-4 mb-3 space-y-2">
+              {/* Main strip */}
+              <div className={`rounded-2xl border px-4 py-3 flex items-center gap-2 ${rescheduleMode ? 'bg-violet-50 border-violet-200' : 'bg-red-50 border-red-200'}`}>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs font-bold truncate ${rescheduleMode ? 'text-violet-700' : 'text-red-700'}`}>
+                    {rescheduleMode ? '📅 Pick a new date on the calendar' : `🔒 ${bk.siteName}`}
+                  </p>
+                  {!rescheduleMode && bk.siteAddress && <p className="text-[10px] text-red-400 truncate mt-0.5">📍 {bk.siteAddress}</p>}
+                  {!rescheduleMode && <p className="text-[10px] text-red-400 mt-0.5">📅 {activeBookedKey}</p>}
+                  {rescheduleMode && <p className="text-[10px] text-violet-400 mt-0.5">Tap any green day above ↑</p>}
+                </div>
+
+                {/* 💬 Chat */}
+                <button
+                  onClick={async () => {
+                    const rawSiteId = bk.siteId ?? bk.siteId;
+                    if (!rawSiteId) { toast.warning('No site ID on this booking'); return; }
+                    try {
+                      const result = await getTradeChatBySite(String(rawSiteId));
+                      setChatHistory(result?.chat?.messages ?? []);
+                      setChatContractorId(String(result?.contractorId ?? ''));
+                    } catch (err) {
+                      console.error('Chat load error', err);
+                      setChatHistory([]);
+                    }
+                    setChatOpen(true);
+                  }}
+                  title="Open chat"
+                  className="flex-shrink-0 w-8 h-8 rounded-xl bg-violet-500 hover:bg-violet-400 text-white flex items-center justify-center transition active:scale-95 shadow-sm shadow-violet-200"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </button>
+
+                {/* 📅 Update schedule */}
+                <button
+                  onClick={() => { setRescheduleMode((v) => !v); setRescheduleNewKey(null); }}
+                  title="Update schedule"
+                  className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition active:scale-95 shadow-sm ${rescheduleMode ? 'bg-sky-500 text-white shadow-sky-200' : 'bg-sky-100 hover:bg-sky-200 text-sky-600'}`}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
+
+                {/* 🗑️ Delete booking */}
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  title="Remove booking"
+                  className="flex-shrink-0 w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-500 flex items-center justify-center transition active:scale-95 disabled:opacity-40"
+                >
+                  {deleting ? (
+                    <span className="w-3 h-3 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => { setActiveBookedKey(null); setRescheduleMode(false); setRescheduleNewKey(null); }}
+                  className="text-slate-300 hover:text-slate-500 text-lg leading-none flex-shrink-0"
+                >×</button>
+              </div>
+
+              {/* Reschedule confirm row — appears when a new date is picked */}
+              {rescheduleMode && rescheduleNewKey && (
+                <div className="rounded-2xl bg-violet-50 border border-violet-200 px-4 py-2.5 flex items-center gap-3">
+                  <p className="flex-1 text-xs font-semibold text-violet-700">
+                    Send request for <span className="font-extrabold">{rescheduleNewKey}</span>?
+                  </p>
+                  <button
+                    onClick={handleRescheduleConfirm}
+                    disabled={rescheduling}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-violet-500 hover:bg-violet-400 text-white disabled:opacity-50 transition shadow-sm shadow-violet-200"
+                  >
+                    {rescheduling ? '…' : '✉️ Send'}
+                  </button>
+                  <button
+                    onClick={() => { setRescheduleMode(false); setRescheduleNewKey(null); }}
+                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-500 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         <div className="px-6 pb-5">
           {dirty || saved ? (
@@ -616,6 +772,31 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
           )}
         </div>
       )}
+      {/* ── Real-time chat panel (bottom-left, half width) ───────────────── */}
+      {chatOpen && activeBookedKey && bookingDateMap[activeBookedKey] && (() => {
+        const bk = bookingDateMap[activeBookedKey];
+        // We need contractorId from the booking — stored as bk.contractorId or look up from message
+        // bk comes from initialBookings which has: siteId, siteName, siteAddress, dates, status
+        // We don't have contractorId in bookings, so we'll use siteId to look it up.
+        // For now pass siteId as a proxy — the server resolves it from the chat record.
+        return (
+          <div className="fixed inset-0 z-50 pointer-events-none">
+            <ChatPanel
+              contractorId={chatContractorId}
+              tradeProId={String(userId)}
+              siteId={String(bk.siteId ?? '')}
+              siteName={bk.siteName}
+              userType="trade"
+              initialMessages={chatHistory}
+              uploadFn={tradeUploadChatFile}
+              onClose={() => { setChatOpen(false); setChatHistory([]); setChatContractorId(''); }}
+              className="absolute bottom-4 left-4 pointer-events-auto"
+              style={{ width: 'min(50vw, 380px)', height: 'min(30vh, 240px)' }}
+            />
+          </div>
+        );
+      })()}
+
     </div>
   );
 }

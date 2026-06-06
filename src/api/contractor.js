@@ -25,7 +25,14 @@ export const askAvailability = (tradeId, date, siteName, siteAddress, lang, site
   api.post(`/contractor/trade-pros/${tradeId}/ask-availability`, { date, siteName, siteAddress, lang, siteId }).then(r => r.data);
 
 // Applications (trade pros who applied to contractor sites)
-export const getApplications    = () => api.get('/contractor/applications').then(r => r.data.applications);
-export const approveApplication = (id, scheduledDate) => api.patch(`/contractor/applications/${id}/approve`, { scheduledDate }).then(r => r.data);
+export const getApplications      = () => api.get('/contractor/applications').then(r => r.data);
+export const approveApplication   = (id, scheduledDate) => api.patch(`/contractor/applications/${id}/approve`, { scheduledDate }).then(r => r.data);
+export const approveReschedule    = (id) => api.patch(`/contractor/messages/${id}/approve-reschedule`).then(r => r.data);
+export const declineReschedule    = (id) => api.patch(`/contractor/messages/${id}/decline-reschedule`).then(r => r.data);
 export const getWorkPlan        = (siteId) => api.get(`/contractor/sites/${siteId}/work-plan`).then(r => r.data);
+export const getChatHistory     = (contractorId, tradeProId, siteId) => api.get(`/chat/${contractorId}/${tradeProId}/${siteId}`).then(r => r.data.chat);
+export const uploadChatFile     = (formData) => api.post('/chat/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+export const updateWorkPlanDate    = (siteId, tradeName, requiredDate) => api.patch(`/contractor/sites/${siteId}/work-plan`, { tradeName, requiredDate }).then(r => r.data);
+export const requestWorkPlanDate   = (siteId, tradeName, requiredDate, lang) => api.post(`/contractor/sites/${siteId}/work-plan/request-date`, { tradeName, requiredDate, lang }).then(r => r.data);
+export const deleteWorkPlanTrade = (siteId, tradeName) => api.delete(`/contractor/sites/${siteId}/work-plan`, { data: { tradeName } }).then(r => r.data);
 

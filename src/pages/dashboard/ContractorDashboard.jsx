@@ -9,7 +9,6 @@ import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx
 import UpdateSitePhotoModal from '../../components/contractor/UpdateSitePhotoModal.jsx';
 import TradeCalendarModal from '../../components/contractor/TradeCalendarModal.jsx';
 import ContractorApplicationsModal from '../../components/contractor/ContractorApplicationsModal.jsx';
-import WorkPlanModal from '../../components/contractor/WorkPlanModal.jsx';
 
 const content = {
   en: {
@@ -216,7 +215,7 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
         {hasAssigned && (
           <button
             type="button"
-            onClick={() => onWorkPlan(site)}
+            onClick={() => onWorkPlan(site._id)}
             title="Work Plan"
             className="absolute top-2 left-2 flex items-center gap-1 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold px-2.5 py-1 rounded-xl shadow-sm transition-all active:scale-95"
           >
@@ -512,14 +511,18 @@ export default function ContractorDashboard() {
   const [search,       setSearch]       = useState(null);
   const [manageSite,   setManageSite]   = useState(null);
   const [photoSite,    setPhotoSite]    = useState(null);
-  const [workPlanSite, setWorkPlanSite] = useState(null);
   const [calendarPro,          setCalendarPro]          = useState(null);
   const [selection,            setSelection]            = useState(null);
   const [applicationsOpen,     setApplicationsOpen]     = useState(false);
   const [applicationsCount,    setApplicationsCount]    = useState(0);
 
   const refreshApplicationCount = () =>
-    getApplications().then((apps) => setApplicationsCount(apps.filter(a => a.status === 'pending').length)).catch(() => {});
+    getApplications()
+      .then(({ applications = [], reschedules = [] }) =>
+        setApplicationsCount(
+          applications.filter(a => a.status === 'pending').length + reschedules.length
+        )
+      ).catch(() => {});
 
   const refreshSites = () =>
     getSites().then((loaded) =>
@@ -624,7 +627,7 @@ export default function ContractorDashboard() {
               <div className="relative">
                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-amber-100 to-sky-100 flex items-center justify-center text-sm sm:text-base">🏗️</div>
                 {applicationsCount > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow border-2 border-white leading-none">
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-orange-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow border-2 border-white leading-none animate-pulse">
                     {applicationsCount > 99 ? '99+' : applicationsCount}
                   </span>
                 )}
@@ -688,7 +691,7 @@ export default function ContractorDashboard() {
                       onFind={handleFind}
                       onManageTrades={setManageSite}
                       onUpdatePhoto={setPhotoSite}
-                      onWorkPlan={setWorkPlanSite}
+                      onWorkPlan={(siteId) => navigate(`/dashboard/contractor/work-plan/${siteId}`)}
                       searchState={search?.loading ? search : null}
                     />
                   ))}
@@ -741,12 +744,6 @@ export default function ContractorDashboard() {
           site={photoSite}
           onClose={() => setPhotoSite(null)}
           onUpdated={handleTradesUpdated}
-        />
-      )}
-      {workPlanSite && (
-        <WorkPlanModal
-          siteId={workPlanSite._id}
-          onClose={() => setWorkPlanSite(null)}
         />
       )}
       {calendarPro && (
