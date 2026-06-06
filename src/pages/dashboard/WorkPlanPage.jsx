@@ -135,36 +135,37 @@ export default function WorkPlanPage() {
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-slate-50 to-amber-50 font-sans text-slate-800">
 
       {/* Top nav bar */}
-      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-sky-100 shadow-sm px-4 sm:px-8 py-3 flex items-center gap-4">
+      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-sky-100 shadow-sm px-3 sm:px-8 py-2 sm:py-3 flex items-center gap-2 sm:gap-4">
         <button
           onClick={() => navigate('/dashboard/contractor')}
-          className="flex items-center gap-1.5 text-sm font-semibold text-sky-600 hover:text-sky-500 transition"
+          className="flex items-center gap-1 text-xs sm:text-sm font-semibold text-sky-600 hover:text-sky-500 transition flex-shrink-0"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
-          {t.back}
+          <span className="hidden xs:inline sm:inline">{t.back}</span>
+          <span className="xs:hidden sm:hidden">Back</span>
         </button>
-        <div className="h-5 w-px bg-slate-200" />
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
-            {t.badge}
+        <div className="h-4 w-px bg-slate-200 flex-shrink-0" />
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 flex-shrink-0 whitespace-nowrap">
+            📋 Work Plan
           </span>
           {data?.siteName && (
-            <span className="text-sm font-extrabold text-slate-800">{data.siteName}</span>
+            <span className="text-xs sm:text-sm font-extrabold text-slate-800 truncate">{data.siteName}</span>
           )}
         </div>
       </div>
 
       {/* Page content */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
 
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-extrabold text-slate-800">
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">
             {data?.siteName ?? '…'}
           </h1>
-          <p className="text-slate-500 text-sm mt-1">{t.subtitle}</p>
+          <p className="text-slate-500 text-xs sm:text-sm mt-0.5">{t.subtitle}</p>
         </div>
 
         {/* Content */}
@@ -179,8 +180,8 @@ export default function WorkPlanPage() {
         ) : (
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
 
-            {/* Table header */}
-            <div className="grid grid-cols-[32px_1fr_1fr_110px_80px_44px_44px_44px] gap-3 items-center px-5 py-3 bg-gradient-to-r from-slate-50 to-sky-50 border-b border-slate-100">
+            {/* Desktop table header — hidden on mobile */}
+            <div className="hidden sm:grid grid-cols-[32px_1fr_1fr_110px_80px_44px_44px_44px] gap-3 items-center px-5 py-3 bg-gradient-to-r from-slate-50 to-sky-50 border-b border-slate-100">
               {[t.col.num, t.col.trade, t.col.pro, t.col.date, t.col.budget, t.col.chat, t.col.actions, ''].map((col, i) => (
                 <span key={i} className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">{col}</span>
               ))}
@@ -190,8 +191,37 @@ export default function WorkPlanPage() {
             <div className="divide-y divide-slate-50">
               {data.rows.map((row, i) => (
                 <div key={i}>
-                  {/* Main row */}
-                  <div className={`grid grid-cols-[32px_1fr_1fr_110px_80px_44px_44px_44px] gap-3 items-center px-5 py-3.5 transition-colors hover:bg-slate-50/60 ${editIdx === i ? 'bg-sky-50/40' : ''}`}>
+                  {/* ── Mobile card layout ── */}
+                  <div className={`sm:hidden px-4 py-4 space-y-3 transition-colors ${editIdx === i ? 'bg-sky-50/40' : ''}`}>
+                    {/* Top: number + trade + actions */}
+                    <div className="flex items-center gap-2">
+                      <span className="w-7 h-7 rounded-full bg-sky-100 text-sky-600 text-xs font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
+                      <span className="flex-1 text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 truncate">🔧 {row.professionality}</span>
+                      {/* Action icons */}
+                      <button onClick={async () => {
+                        if (chatRow === i) { setChatRow(null); setChatMessages([]); return; }
+                        try { const chat = await getChatHistory(String(contractorId), row.tradeProId, siteId); setChatMessages(chat?.messages ?? []); } catch { setChatMessages([]); }
+                        setChatRow(i);
+                      }} className={`w-9 h-9 rounded-xl flex items-center justify-center transition flex-shrink-0 ${chatRow === i ? 'bg-violet-500 text-white' : 'bg-slate-100 hover:bg-violet-100 text-slate-400 hover:text-violet-600'}`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                      </button>
+                      <button onClick={() => editIdx === i ? setEditIdx(null) : handleEditOpen(i, row)} className={`w-9 h-9 rounded-xl flex items-center justify-center transition flex-shrink-0 ${editIdx === i ? 'bg-sky-500 text-white' : 'bg-slate-100 hover:bg-sky-100 text-slate-400 hover:text-sky-600'}`}>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      </button>
+                      <button onClick={() => handleDelete(i, row)} disabled={deletingIdx === i} className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-500 flex items-center justify-center transition flex-shrink-0 disabled:opacity-40">
+                        {deletingIdx === i ? <span className="w-3.5 h-3.5 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" /> : <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>}
+                      </button>
+                    </div>
+                    {/* Details row */}
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-sm font-semibold text-slate-700">👤 {row.tradeName}</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-lg border ${row.date !== '—' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'text-slate-300 border-dashed border-slate-200'}`}>📅 {row.date !== '—' ? row.date : '—'}</span>
+                      {row.budget !== '—' && <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">💰 {row.budget}</span>}
+                    </div>
+                  </div>
+
+                  {/* ── Desktop row — hidden on mobile ── */}
+                  <div className={`hidden sm:grid grid-cols-[32px_1fr_1fr_110px_80px_44px_44px_44px] gap-3 items-center px-5 py-3.5 transition-colors hover:bg-slate-50/60 ${editIdx === i ? 'bg-sky-50/40' : ''}`}>
 
                     {/* # */}
                     <span className="w-7 h-7 rounded-full bg-sky-100 text-sky-600 text-xs font-bold flex items-center justify-center flex-shrink-0">
@@ -278,11 +308,11 @@ export default function WorkPlanPage() {
                         </svg>
                       )}
                     </button>
-                  </div>
+                  </div> {/* end desktop row */}
 
-                  {/* Inline date editor */}
+                  {/* Inline date editor — shared between mobile + desktop */}
                   {editIdx === i && (
-                    <div className="px-5 pb-4 flex items-center gap-3 bg-sky-50/40 border-t border-sky-100">
+                    <div className="px-4 sm:px-5 pb-4 flex flex-wrap items-center gap-2 sm:gap-3 bg-sky-50/40 border-t border-sky-100 pt-3">
                       <span className="text-xs font-semibold text-sky-600">{t.updateTitle}:</span>
                       <input
                         type="date"
@@ -306,21 +336,38 @@ export default function WorkPlanPage() {
                     </div>
                   )}
 
-                  {/* Inline chat panel */}
+                  {/* Chat panel — full-screen overlay on mobile, inline on desktop */}
                   {chatRow === i && (
-                    <div className="px-4 pb-4 border-t border-violet-100 bg-violet-50/30">
-                      <ChatPanel
-                        contractorId={String(contractorId)}
-                        tradeProId={row.tradeProId}
-                        siteId={siteId}
-                        siteName={data?.siteName ?? ''}
-                        userType="contractor"
-                        initialMessages={chatMessages}
-                        onClose={() => { setChatRow(null); setChatMessages([]); }}
-                        className="mt-3"
-                        style={{ height: '280px' }}
-                      />
-                    </div>
+                    <>
+                      {/* Mobile: full-screen fixed overlay */}
+                      <div className="sm:hidden fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex flex-col justify-end">
+                        <ChatPanel
+                          contractorId={String(contractorId)}
+                          tradeProId={row.tradeProId}
+                          siteId={siteId}
+                          siteName={data?.siteName ?? ''}
+                          userType="contractor"
+                          initialMessages={chatMessages}
+                          onClose={() => { setChatRow(null); setChatMessages([]); }}
+                          className="rounded-t-3xl rounded-b-none border-b-0"
+                          style={{ height: '70dvh' }}
+                        />
+                      </div>
+                      {/* Desktop: inline below the row */}
+                      <div className="hidden sm:block px-4 pb-4 border-t border-violet-100 bg-violet-50/30">
+                        <ChatPanel
+                          contractorId={String(contractorId)}
+                          tradeProId={row.tradeProId}
+                          siteId={siteId}
+                          siteName={data?.siteName ?? ''}
+                          userType="contractor"
+                          initialMessages={chatMessages}
+                          onClose={() => { setChatRow(null); setChatMessages([]); }}
+                          className="mt-3"
+                          style={{ height: '320px' }}
+                        />
+                      </div>
+                    </>
                   )}
                 </div>
               ))}
