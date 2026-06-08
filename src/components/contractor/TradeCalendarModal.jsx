@@ -16,7 +16,7 @@ const content = {
   en: {
     badge:      '📅 Availability Calendar',
     subtitle:   (name) => `${name}'s schedule`,
-    legend:     { free: 'Available', busy: 'Off', booked: 'On Job', today: 'Today', selected: 'Selected' },
+    legend:     { free: 'Available', busy: 'Unavailable', booked: 'Already Booked', today: 'Today', selected: 'Selected' },
     pickHint:   'Tap a day to select a date for your request',
     selectedOn: (d) => `Selected: ${d}`,
     askBtn:     'Ask for Availability',
@@ -36,7 +36,7 @@ const content = {
   es: {
     badge:      '📅 Calendario de Disponibilidad',
     subtitle:   (name) => `Horario de ${name}`,
-    legend:     { free: 'Disponible', busy: 'Libre no', booked: 'En obra', today: 'Hoy', selected: 'Seleccionado' },
+    legend:     { free: 'Disponible', busy: 'No disponible', booked: 'Ya reservado', today: 'Hoy', selected: 'Seleccionado' },
     pickHint:   'Toca un día para seleccionar la fecha de tu solicitud',
     selectedOn: (d) => `Seleccionado: ${d}`,
     askBtn:     'Solicitar Disponibilidad',
@@ -123,6 +123,8 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
 
   const handleDayClick = (day) => {
     const key = toDateKey(year, month, day);
+    // Don't allow selecting a day that's already booked or manually off
+    if (bookingMap[key] || busySet.has(key)) return;
     setSelectedKey((prev) => prev === key ? null : key);
     setSent(false);
     setSendError('');
@@ -208,7 +210,7 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
               <div className="flex items-center gap-3 px-6 py-2.5 border-b border-sky-50 bg-sky-50/40 flex-wrap">
                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.free}</span></div>
                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-300" /><span className="text-xs text-slate-500 font-medium">{t.legend.busy}</span></div>
-                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-500" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-500" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full border-2 border-sky-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.today}</span></div>
                 <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.selected}</span></div>
               </div>
@@ -238,16 +240,16 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
                           ${isSelected
                             ? 'bg-amber-400 text-white shadow-md shadow-amber-200 scale-105'
                             : booking
-                              ? 'bg-amber-500 text-white shadow-sm shadow-amber-200 hover:bg-amber-600'
+                              ? 'bg-red-500 text-white shadow-sm shadow-red-200 hover:bg-red-600 cursor-not-allowed'
                               : isOff
-                                ? 'bg-red-300 text-white shadow-sm shadow-red-100 hover:bg-red-400'
+                                ? 'bg-red-300 text-white shadow-sm shadow-red-100 hover:bg-red-400 cursor-not-allowed'
                                 : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
                           ${isToday ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}
                       >
                         <span className="leading-none">{day}</span>
                         {booking && (
                           <span className="absolute bottom-0.5 left-0 right-0 text-[6px] font-bold text-white/90 text-center px-0.5 truncate leading-none">
-                            {booking.siteName}
+                            {booking.siteName || '🔒'}
                           </span>
                         )}
                         {isToday && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/80" />}
