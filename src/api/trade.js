@@ -12,3 +12,4 @@ export const requestReschedule = (siteId, newDate)   => api.post('/trade/resched
 export const removeBooking     = (siteId)            => api.delete('/trade/bookings', { data: { siteId } }).then(r => r.data);
 export const getTradeChatBySite = (siteId) => api.get(`/chat/trade/${siteId}`).then(r => r.data);
 export const uploadChatFile     = (formData) => api.post('/chat/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+export const submitWorkLog      = (payload)  => api.post('/trade/work-log', payload).then(r => r.data);

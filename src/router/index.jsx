@@ -22,6 +22,8 @@ import ContractorRegister from '../pages/register/ContractorRegister';
 import ContractorDashboard from '../pages/dashboard/ContractorDashboard';
 import TradeDashboard from '../pages/dashboard/TradeDashboard';
 import WorkPlanPage from '../pages/dashboard/WorkPlanPage';
+import JobResultsPage from '../pages/dashboard/JobResultsPage';
+import TradeSearchResultsPage from '../pages/dashboard/TradeSearchResultsPage';
 import ProjectsShowcase from '../pages/ProjectsShowcase';
 import TradesShowcase from '../pages/TradesShowcase';
 
@@ -39,7 +41,9 @@ const router = createBrowserRouter(
       {/* Dashboards */}
       <Route path="/dashboard/contractor"                   element={<ContractorDashboard />} />
       <Route path="/dashboard/contractor/work-plan/:siteId" element={<WorkPlanPage />} />
+      <Route path="/dashboard/contractor/trade-search"      element={<TradeSearchResultsPage />} />
       <Route path="/dashboard/trade"                        element={<TradeDashboard />} />
+      <Route path="/dashboard/trade/jobs"                  element={<JobResultsPage />} />
 
       {/* Auth — uncomment when pages are built */}
       {/* <Route element={<AuthLayout />}>

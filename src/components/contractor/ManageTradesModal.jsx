@@ -61,9 +61,11 @@ const content = {
       cancel:  'Cancel',
     },
     tradeInfo: {
-      badge:       '📋 Trade Details',
-      budgetLabel: 'Budget',
-      dateLabel:   'Required Date',
+      badge:         '📋 Trade Details',
+      budgetLabel:   'Budget',
+      workersLabel:  'Workers Needed',
+      workersHint:   'Number of workers',
+      dateLabel:     'Required Date',
       hint:        'Tap a day to change the date',
       approve:     '✅ Approve Trade',
       approved:    '✓ Approved',
@@ -104,9 +106,11 @@ const content = {
       cancel:  'Cancelar',
     },
     tradeInfo: {
-      badge:       '📋 Detalles del Oficio',
-      budgetLabel: 'Presupuesto',
-      dateLabel:   'Fecha Requerida',
+      badge:         '📋 Detalles del Oficio',
+      budgetLabel:   'Presupuesto',
+      workersLabel:  'Trabajadores Necesarios',
+      workersHint:   'Número de trabajadores',
+      dateLabel:     'Fecha Requerida',
       hint:        'Toca un día para cambiar la fecha',
       approve:     '✅ Aprobar Oficio',
       approved:    '✓ Aprobado',
@@ -147,9 +151,10 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   const [selectedTradeName, setSelectedTradeName] = useState(null);
 
   // ── ADD flow: Step 1 — budget ──────────────────────────────
-  const [pendingTrade, setPendingTrade] = useState(null);
-  const [budgetType,   setBudgetType]   = useState('amount');
-  const [budgetValue,  setBudgetValue]  = useState('');
+  const [pendingTrade,  setPendingTrade]  = useState(null);
+  const [budgetType,    setBudgetType]    = useState('amount');
+  const [budgetValue,   setBudgetValue]   = useState('');
+  const [workersValue,  setWorkersValue]  = useState('');
 
   // ── ADD flow: Step 2 — date picker ─────────────────────────
   const [pendingDateEntry, setPendingDateEntry] = useState(null);
@@ -158,13 +163,14 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   const [selectedDate,  setSelectedDate]  = useState(null);
 
   // ── EDIT flow: TradeInfo modal ─────────────────────────────
-  const [tradeInfoOpen,  setTradeInfoOpen]  = useState(false);
-  const [tiTrade,        setTiTrade]        = useState(null);
-  const [tiBudgetType,   setTiBudgetType]   = useState('amount');
-  const [tiBudgetValue,  setTiBudgetValue]  = useState('');
-  const [tiSelectedDate, setTiSelectedDate] = useState(null);
-  const [tiViewYear,     setTiViewYear]     = useState(today.getFullYear());
-  const [tiViewMonth,    setTiViewMonth]    = useState(today.getMonth());
+  const [tradeInfoOpen,   setTradeInfoOpen]   = useState(false);
+  const [tiTrade,         setTiTrade]         = useState(null);
+  const [tiBudgetType,    setTiBudgetType]    = useState('amount');
+  const [tiBudgetValue,   setTiBudgetValue]   = useState('');
+  const [tiWorkersValue,  setTiWorkersValue]  = useState('');
+  const [tiSelectedDate,  setTiSelectedDate]  = useState(null);
+  const [tiViewYear,      setTiViewYear]      = useState(today.getFullYear());
+  const [tiViewMonth,     setTiViewMonth]     = useState(today.getMonth());
 
   const tiMaxMonth  = today.getMonth() === 11 ? 0  : today.getMonth() + 1;
   const tiMaxYear   = today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear();
@@ -193,10 +199,11 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
     setPendingTrade(name);
     setBudgetType('amount');
     setBudgetValue('');
+    setWorkersValue('');
   };
 
   const confirmBudget = (skip = false) => {
-    const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null };
+    const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null, workers_no: null };
     if (!skip && budgetValue) {
       const num = parseFloat(budgetValue);
       if (!isNaN(num) && num > 0) {
@@ -205,6 +212,8 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
         else                         entry.totalHours = num;
       }
     }
+    const w = parseInt(workersValue);
+    if (!isNaN(w) && w > 0) entry.workers_no = w;
     setPendingTrade(null);
     setPendingDateEntry(entry);
     setSelectedDate(null);
@@ -229,6 +238,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
       tr.budgetType === 'amount' ? (tr.maxAmount?.toString()  ?? '') :
       tr.budgetType === 'hours'  ? (tr.totalHours?.toString() ?? '') : ''
     );
+    setTiWorkersValue(tr.workers_no ? tr.workers_no.toString() : '');
     const preDate = tr.requiredDate ?? null;
     setTiSelectedDate(preDate);
     if (preDate) {
@@ -245,12 +255,14 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   const buildTiUpdated = (extraFields = {}) => {
     const num = parseFloat(tiBudgetValue);
     const hasBudget = !isNaN(num) && num > 0;
+    const w = parseInt(tiWorkersValue);
     return {
       ...tiTrade,
-      budgetType:   hasBudget ? tiBudgetType : null,
-      maxAmount:    hasBudget && tiBudgetType === 'amount' ? num : null,
-      totalHours:   hasBudget && tiBudgetType === 'hours'  ? num : null,
-      requiredDate: tiSelectedDate,
+      budgetType:    hasBudget ? tiBudgetType : null,
+      maxAmount:     hasBudget && tiBudgetType === 'amount' ? num : null,
+      totalHours:    hasBudget && tiBudgetType === 'hours'  ? num : null,
+      requiredDate:  tiSelectedDate,
+      workers_no: (!isNaN(w) && w > 0) ? w : null,
       ...extraFields,
     };
   };
@@ -359,6 +371,9 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
                         {!isSelected && tr.requiredDate && (
                           <span className="text-xs font-semibold text-sky-600 bg-sky-50 border border-sky-200 px-1.5 py-0.5 rounded-lg">📅 {tr.requiredDate}</span>
                         )}
+                        {!isSelected && tr.workers_no && (
+                          <span className="text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-lg">👷 {tr.workers_no}</span>
+                        )}
                         {isSelected && (
                           <span className="text-[10px] text-white/80 font-normal">tap again to deselect</span>
                         )}
@@ -464,7 +479,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
                 </button>
               </div>
 
-              <div className="relative mb-5">
+              <div className="relative mb-3">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">
                   {budgetType === 'amount' ? '$' : '⏱'}
                 </span>
@@ -475,6 +490,17 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
                   className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-300 transition"
                   autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter') confirmBudget(false); }}
+                />
+              </div>
+
+              {/* Workers needed */}
+              <div className="relative mb-5">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">👷</span>
+                <input
+                  type="number" min="1" step="1"
+                  value={workersValue} onChange={(e) => setWorkersValue(e.target.value)}
+                  placeholder={lang === 'es' ? 'Número de trabajadores' : 'Number of workers'}
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-300 transition"
                 />
               </div>
             </div>
@@ -612,7 +638,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
                     {ti.typeHours}
                   </button>
                 </div>
-                <div className="relative">
+                <div className="relative mb-3">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">
                     {tiBudgetType === 'amount' ? '$' : '⏱'}
                   </span>
@@ -621,6 +647,18 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
                     value={tiBudgetValue} onChange={(e) => setTiBudgetValue(e.target.value)}
                     placeholder={tiBudgetType === 'amount' ? ti.amountHint : ti.hoursHint}
                     className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300 transition"
+                  />
+                </div>
+
+                {/* Workers needed */}
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mt-3 mb-1.5">{ti.workersLabel}</p>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">👷</span>
+                  <input
+                    type="number" min="1" step="1"
+                    value={tiWorkersValue} onChange={(e) => setTiWorkersValue(e.target.value)}
+                    placeholder={ti.workersHint}
+                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300 transition"
                   />
                 </div>
               </div>

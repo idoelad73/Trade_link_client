@@ -161,6 +161,8 @@ export default function TradeDashboard() {
                 initialBusyDays={tradeData?.busyDays || []}
                 initialBookings={tradeData?.bookings || []}
                 approvedDates={approvedDates}
+                professionality={tradeData?.professionality ?? ''}
+                hourlyRate={tradeData?.hourlyRate ?? null}
               />
             )}
           </div>

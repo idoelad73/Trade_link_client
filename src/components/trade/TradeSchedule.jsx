@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
-import { updateSchedule, findJobs, applyToJob, requestReschedule, removeBooking, getTradeChatBySite, uploadChatFile as tradeUploadChatFile } from '../../api/trade.js';
+import { useNavigate } from 'react-router-dom';
+import { updateSchedule, findJobs, requestReschedule, removeBooking, getTradeChatBySite, uploadChatFile as tradeUploadChatFile } from '../../api/trade.js';
 import useUIStore from '../../stores/uiStore.js';
 import useAuthStore from '../../stores/authStore.js';
 import { toast } from '../../utils/toast.js';
 import ChatPanel from '../shared/ChatPanel.jsx';
+import WorkingHoursModal from './WorkingHoursModal.jsx';
 
 // ── Working-day helpers ────────────────────────────────────────────────────────
 const _hCache = {};
@@ -157,7 +159,8 @@ function buildCalendar(year, month) {
   return cells;
 }
 
-export default function TradeSchedule({ initialBusyDays = [], initialBookings = [], approvedDates = [] }) {
+export default function TradeSchedule({ initialBusyDays = [], initialBookings = [], approvedDates = [], professionality = '', hourlyRate = null }) {
+  const navigate = useNavigate();
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
 
@@ -200,16 +203,10 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   const [unit,     setUnit]     = useState('mi');
   const [distance, setDistance] = useState(25);
 
-  const [jobResults,    setJobResults]    = useState(null);  // null = not searched yet
-  const [jobsLoading,   setJobsLoading]   = useState(false);
-  const [jobError,      setJobError]      = useState('');
-  const [jobTrade,      setJobTrade]      = useState('');
-  const [myHourlyRate,  setMyHourlyRate]  = useState(null);
-  const [applyingId,      setApplyingId]      = useState(null);
-  const [selectedJobDate, setSelectedJobDate] = useState(null); // YYYY-MM-DD orange date
-  const [hoveredJobId,    setHoveredJobId]    = useState(null);
-  const [appliedDates,    setAppliedDates]    = useState(() => new Set()); // persisted after apply
-  const [pendingDates,    setPendingDates]    = useState(() => new Set()); // requiredDates from nearby jobs
+  const [jobsLoading,  setJobsLoading]  = useState(false);
+  const [jobError,     setJobError]     = useState('');
+  const [appliedDates, setAppliedDates] = useState(() => new Set()); // orange after apply
+  const [pendingDates, setPendingDates] = useState(() => new Set()); // requiredDates from nearby jobs
   const [activeBookedKey,  setActiveBookedKey]  = useState(null);
   const [chatOpen,         setChatOpen]         = useState(false);
   const [chatMessage,      setChatMessage]      = useState('');
@@ -220,6 +217,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   const [rescheduleNewKey, setRescheduleNewKey] = useState(null);    // newly picked date key
   const [rescheduling,     setRescheduling]     = useState(false);   // API in-flight
   const [deleting,         setDeleting]         = useState(false);   // delete in-flight
+  const [workingHoursOpen, setWorkingHoursOpen] = useState(false);   // working-hours modal
 
   // Merge dates approved via the messages modal into the orange calendar set
   useEffect(() => {
@@ -234,23 +232,20 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   const handleFindJobs = useCallback(async () => {
     setJobsLoading(true);
     setJobError('');
-    setJobResults(null);
     try {
       const data = await findJobs(distance, unit);
-      setJobResults(data.results);
-      setJobTrade(data.professionality);
-      setMyHourlyRate(data.hourlyRate ?? null);
-      setSelectedJobDate(null);
-      // Collect all requiredDates as orange pending markers on the calendar
+      // Mark required dates orange on the calendar (visible when user returns)
       const reqDates = new Set(data.results.map(r => r.tradeEntry?.requiredDate).filter(Boolean));
       setPendingDates(reqDates);
-      // Auto-navigate to the month of the first required date
-      const firstRequired = [...reqDates][0];
-      if (firstRequired) {
-        const [ry, rm] = firstRequired.split('-');
-        setViewYear(parseInt(ry));
-        setViewMonth(parseInt(rm) - 1);
-      }
+      // Navigate to the job results page
+      navigate('/dashboard/trade/jobs', {
+        state: {
+          results:    data.results,
+          trade:      data.professionality,
+          hourlyRate: data.hourlyRate ?? null,
+          unit,
+        },
+      });
     } catch (err) {
       if (err?.response?.data?.message === 'no_location') {
         setJobError(t.noLocation);
@@ -260,52 +255,11 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
     } finally {
       setJobsLoading(false);
     }
-  }, [distance, unit, t]);
+  }, [distance, unit, t, navigate]);
 
-  const handleApply = useCallback(async (job) => {
-    if (applyingId) return;
-    const te = job.tradeEntry;
-    const baseDate = te?.requiredDate || selectedJobDate;
-    if (!baseDate) return;
-    const actualStart = (te?.budgetType === 'hours' && te?.totalHours)
-      ? getWorkingDaysRange(baseDate, te.totalHours)[0]
-      : nextWorkingDay(baseDate);
-    setApplyingId(job._id);
-    try {
-      await applyToJob(job._id, lang, actualStart);
-      // Mark the applied working-day range orange on the calendar
-      const appliedRange = (te?.budgetType === 'hours' && te?.totalHours)
-        ? getWorkingDaysRange(actualStart, te.totalHours)
-        : [actualStart];
-      setAppliedDates((prev) => { const next = new Set(prev); appliedRange.forEach(d => next.add(d)); return next; });
-      setSelectedJobDate(null);
-      toast.success(t.applySuccess(job.name, actualStart), { duration: 5000 });
-    } catch (err) {
-      if (err?.response?.status === 409) {
-        if (err.response.data?.assigned) {
-          toast.error(t.applyAssigned(job.name), { duration: 4000 });
-        } else {
-          toast.warning(t.applyDupe(job.name), { duration: 4000 });
-        }
-      } else {
-        toast.error(t.applyError, { duration: 4000 });
-      }
-    } finally {
-      setApplyingId(null);
-    }
-  }, [applyingId, selectedJobDate, lang, t]);
 
   const todayKey = toDateKey(today.getFullYear(), today.getMonth(), today.getDate());
 
-  // Orange range: compute from hovered job + selected date
-  const rangeSet = (() => {
-    if (!selectedJobDate) return new Set();
-    const hJob = hoveredJobId ? jobResults?.find(j => String(j._id) === String(hoveredJobId)) : null;
-    const te   = hJob?.tradeEntry;
-    if (te?.budgetType === 'hours' && te?.totalHours)
-      return new Set(getWorkingDaysRange(selectedJobDate, te.totalHours));
-    return new Set([nextWorkingDay(selectedJobDate)]);
-  })();
 
   const toggleDay = (yr, mo, day) => {
     if (!day) return;
@@ -334,10 +288,8 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             const isOrder      = dbBooking?.status === 'order';
             const isOff        = busyDays.has(key);
             const isToday      = key === todayKey;
-            const isSelected   = key === selectedJobDate;
             const isApplied    = appliedDates.has(key);
-            const isInRange    = !isApplied && !isOrder && rangeSet.has(key);
-            const isPending       = jobResults && pendingDates.has(key);
+            const isPending       = pendingDates.has(key);
             const isRescheduleNew = rescheduleMode && key === rescheduleNewKey;
 
             const isNonWorking = !isWorkingDay(key);
@@ -359,7 +311,6 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                 setRescheduleNewKey((prev) => prev === key ? null : key);
                 return;
               }
-              if (jobResults) return;
               toggleDay(yr, mo, day);
             };
 
@@ -376,16 +327,12 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                         ? 'bg-amber-400 text-white shadow-sm shadow-amber-200 cursor-default'
                         : isPending
                           ? 'bg-amber-400 text-white shadow-sm shadow-amber-200 ring-2 ring-amber-500 ring-offset-1'
-                          : isSelected
-                            ? 'bg-amber-400 text-white shadow-sm shadow-amber-200 ring-2 ring-amber-500 ring-offset-1 scale-105'
-                            : isInRange
-                              ? 'bg-amber-300 text-white shadow-sm shadow-amber-100'
-                              : isOff
-                                ? 'bg-red-300 text-white shadow-sm shadow-red-100'
-                                : isNonWorking
-                                  ? 'bg-emerald-200 text-emerald-700 shadow-sm'
-                                  : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
-                    ${isToday && !isSelected && !isPending ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}
+                          : isOff
+                            ? 'bg-red-300 text-white shadow-sm shadow-red-100'
+                            : isNonWorking
+                              ? 'bg-emerald-200 text-emerald-700 shadow-sm'
+                              : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
+                    ${isToday && !isPending ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}
                 >
                   <span className="leading-none">{day}</span>
                   {(isBooked || isOrder) && dbBooking?.siteName && (
@@ -453,8 +400,8 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-300" /><span className="text-xs text-slate-500 font-medium">{t.legend.busy}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full border-2 border-sky-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.today}</span></div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-400" /><span className="text-xs text-slate-500 font-medium">{jobResults ? 'Job Date' : t.legendPending}</span></div>
-          <span className="text-xs text-slate-400 ml-auto">{jobResults ? '' : t.hint}</span>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-400" /><span className="text-xs text-slate-500 font-medium">{t.legendPending}</span></div>
+          <span className="text-xs text-slate-400 ml-auto">{t.hint}</span>
         </div>
 
         <div>{renderMonth(viewYear, viewMonth)}</div>
@@ -538,6 +485,18 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
+
+                {/* ⏱️ Working hours */}
+                <button
+                  onClick={() => setWorkingHoursOpen(true)}
+                  title="Log working hours"
+                  className="flex-shrink-0 w-8 h-8 rounded-xl bg-violet-100 hover:bg-violet-200 text-violet-600 flex items-center justify-center transition active:scale-95 shadow-sm shadow-violet-100"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <circle cx="12" cy="12" r="9" strokeLinecap="round" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
                   </svg>
                 </button>
 
@@ -645,134 +604,29 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
         </button>
       </div>
 
-      {/* ── Job results ─────────────────────────────────────────── */}
-      {(jobError || jobResults) && (
-        <div className="space-y-3">
-
-          {jobError && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 text-sm text-amber-700 font-medium text-center">
-              {jobError}
-            </div>
-          )}
-
-          {jobResults && jobResults.length === 0 && !jobError && (
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl px-5 py-4 text-sm text-slate-400 text-center">
-              {t.noJobs}
-            </div>
-          )}
-
-          {jobResults && jobResults.length > 0 && (
-            <>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide px-1">
-                {t.jobsFound(jobResults.length, jobTrade)}
-              </p>
-              {jobResults.map((job) => {
-                const distMi = (job.distanceMeters / 1609.344).toFixed(1);
-                const distKm = (job.distanceMeters / 1000).toFixed(1);
-                const distLabel = unit === 'km' ? `${distKm} km` : `${distMi} mi`;
-                const te = job.tradeEntry;
-
-                return (
-                  <div key={job._id} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden"
-                    onMouseEnter={() => setHoveredJobId(job._id)}
-                    onMouseLeave={() => setHoveredJobId(null)}
-                  >
-
-                    {/* Site photo bar */}
-                    <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-slate-50">
-                      {job.photo ? (
-                        <img src={job.photo} alt={job.name} className="w-12 h-12 rounded-xl object-cover flex-shrink-0 border border-slate-100" />
-                      ) : (
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-50 to-sky-50 flex items-center justify-center text-2xl flex-shrink-0">
-                          {job.type === 'residential' ? '🏠' : '🏢'}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-extrabold text-slate-800 text-sm truncate">{job.name}</p>
-                        <p className="text-xs text-slate-400 truncate">📍 {job.address}</p>
-                      </div>
-                      <span className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-50 text-sky-600 border border-sky-100">
-                        📏 {distLabel}
-                      </span>
-                    </div>
-
-                    {/* Details row */}
-                    <div className="px-4 pt-3 pb-2 flex items-center gap-3 flex-wrap">
-                      {job.contractorName && (
-                        <span className="text-xs font-semibold text-slate-500">🏗️ {job.contractorName}</span>
-                      )}
-                      {te && te.budgetType === 'amount' && te.maxAmount && (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
-                          💰 ${te.maxAmount}
-                        </span>
-                      )}
-                      {te && te.budgetType === 'hours' && te.totalHours && (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 border border-violet-100">
-                          💰 {te.totalHours}h
-                        </span>
-                      )}
-                      {te && te.budgetType === 'hours' && te.totalHours && myHourlyRate && (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
-                          💵 {te.totalHours}h × ${myHourlyRate} = ${te.totalHours * myHourlyRate}
-                        </span>
-                      )}
-                      {te && te.requiredDate && (
-                        <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 border border-sky-100">
-                          📅 {te.requiredDate.split('-').reverse().slice(0, 2).reverse().join('/')}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Apply button */}
-                    <div className="px-4 pb-4 space-y-1.5">
-                      {te?.requiredDate ? (
-                        <p className="text-[11px] text-amber-600 font-semibold text-center">📅 {te.requiredDate}</p>
-                      ) : (
-                        !selectedJobDate && (
-                          <p className="text-[11px] text-amber-500 font-medium text-center">{t.pickDateFirst}</p>
-                        )
-                      )}
-                      {!te?.requiredDate && selectedJobDate && (() => {
-                        const isHours = te?.budgetType === 'hours' && te?.totalHours;
-                        const range   = isHours ? getWorkingDaysRange(selectedJobDate, te.totalHours) : null;
-                        const start   = range ? range[0] : nextWorkingDay(selectedJobDate);
-                        const end     = range ? range[range.length - 1] : null;
-                        const shifted = start !== selectedJobDate;
-                        return (
-                          <div className="space-y-0.5 text-center">
-                            {shifted && <p className="text-[10px] text-amber-500 font-medium">{t.startAdjusted(start)}</p>}
-                            {isHours ? (
-                              <p className="text-[11px] text-sky-600 font-semibold">
-                                📅 {start} → {end} &nbsp;·&nbsp; {t.workingDays(range.length)}
-                              </p>
-                            ) : (
-                              <p className="text-[11px] text-emerald-600 font-semibold">📅 {start}</p>
-                            )}
-                          </div>
-                        );
-                      })()}
-                      <button
-                        onClick={() => handleApply(job)}
-                        disabled={!!applyingId || !(te?.requiredDate || selectedJobDate)}
-                        className="w-full py-2.5 rounded-xl text-xs font-bold transition-all active:scale-[0.99] bg-gradient-to-r from-amber-500 to-sky-500 hover:from-amber-400 hover:to-sky-400 text-white shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        {applyingId === job._id ? (
-                          <span className="flex items-center justify-center gap-2">
-                            <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                            {t.applying}
-                          </span>
-                        ) : t.apply}
-                      </button>
-                    </div>
-
-                  </div>
-                );
-              })}
-            </>
-          )}
+      {/* Error banner (location / network error) */}
+      {jobError && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 text-sm text-amber-700 font-medium text-center">
+          {jobError}
         </div>
       )}
       {/* ── Real-time chat panel (bottom-left, half width) ───────────────── */}
+      {/* ── Working-hours modal ─────────────────────────────── */}
+      {workingHoursOpen && activeBookedKey && bookingDateMap[activeBookedKey] && (() => {
+        const bk = bookingDateMap[activeBookedKey];
+        return (
+          <WorkingHoursModal
+            date={activeBookedKey}
+            siteName={bk.siteName}
+            siteAddress={bk.siteAddress}
+            siteId={String(bk.siteId ?? '')}
+            professionality={professionality}
+            hourlyRate={hourlyRate}
+            onClose={() => setWorkingHoursOpen(false)}
+          />
+        );
+      })()}
+
       {chatOpen && activeBookedKey && bookingDateMap[activeBookedKey] && (() => {
         const bk = bookingDateMap[activeBookedKey];
         // We need contractorId from the booking — stored as bk.contractorId or look up from message

@@ -7,7 +7,6 @@ import ContractorInfoModal from '../../components/contractor/ContractorInfoModal
 import AddSiteModal from '../../components/contractor/AddSiteModal.jsx';
 import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx';
 import UpdateSitePhotoModal from '../../components/contractor/UpdateSitePhotoModal.jsx';
-import TradeCalendarModal from '../../components/contractor/TradeCalendarModal.jsx';
 import ContractorApplicationsModal from '../../components/contractor/ContractorApplicationsModal.jsx';
 
 const content = {
@@ -281,7 +280,7 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
                       {isAssigned && <span className="text-[10px]">✓</span>}
                       {tr.name}
                     </span>
-                    {/* Row 2: budget + date badges — always shown */}
+                    {/* Row 2: budget + date + workers badges */}
                     <span className="flex items-center gap-1 flex-wrap">
                         {tr.budgetType === 'amount' && tr.maxAmount && (
                           <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'bg-white/25 text-white' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
@@ -300,6 +299,11 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
                         ) : (
                           <span className={`px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'text-white/50' : 'text-slate-300 border border-dashed border-slate-200'}`}>
                             📅 –
+                          </span>
+                        )}
+                        {tr.workers_no && (
+                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'bg-white/25 text-white' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}>
+                            👷 {tr.workers_no}
                           </span>
                         )}
                       </span>
@@ -441,50 +445,6 @@ function DistancePanel({ unit, setUnit, distance, setDistance, maxRate, setMaxRa
   );
 }
 
-// ── Search results panel ─────────────────────────────────────────────────────
-function SearchResults({ search, unit, t, onClose, onOpenCalendar }) {
-  const tr = t.results;
-
-  return (
-    <div className="mt-6 bg-white/90 backdrop-blur-sm rounded-3xl border border-orange-100 shadow-lg overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-orange-500 to-amber-400">
-        <div>
-          <h3 className="text-white font-extrabold text-sm">{tr.title(search.trade, search.siteName)}</h3>
-          {!search.loading && !search.error && !search.noLocation && (
-            <p className="text-white/80 text-xs mt-0.5">{tr.found(search.results.length)}</p>
-          )}
-        </div>
-        <button onClick={onClose}
-          className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white font-bold transition">
-          ×
-        </button>
-      </div>
-
-      <div className="px-6 py-5">
-        {search.loading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="w-8 h-8 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin" />
-          </div>
-        ) : search.noLocation ? (
-          <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3">{tr.noLocation}</p>
-        ) : search.error ? (
-          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-2xl px-4 py-3">{tr.error}</p>
-        ) : search.results.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-6">{tr.none}</p>
-        ) : (
-          <div className="space-y-3">
-            {search.results.map((pro) => (
-              <ProCard key={pro._id} pro={pro} unit={unit} t={tr}
-                siteName={search.siteName}
-                tradeEntry={search.tradeEntry}
-                onOpenCalendar={(id) => onOpenCalendar(id, search.siteName, search.siteAddress, search.siteId, search.requiredDate)} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
 export default function ContractorDashboard() {
@@ -508,10 +468,9 @@ export default function ContractorDashboard() {
   const [distance,     setDistance]     = useState(25);
   const [maxRate,      setMaxRate]      = useState(MAX_RATE);
   const [minRating,    setMinRating]    = useState(0);
-  const [search,       setSearch]       = useState(null);
+  const [findingFor,   setFindingFor]   = useState(null); // { siteId, trade } while search is in-flight
   const [manageSite,   setManageSite]   = useState(null);
   const [photoSite,    setPhotoSite]    = useState(null);
-  const [calendarPro,          setCalendarPro]          = useState(null);
   const [selection,            setSelection]            = useState(null);
   const [applicationsOpen,     setApplicationsOpen]     = useState(false);
   const [applicationsCount,    setApplicationsCount]    = useState(0);
@@ -578,14 +537,30 @@ export default function ContractorDashboard() {
   const handleFind = async (site, trade) => {
     setSelection(null);
     const tradeEntry = site.tradesNeeded.find((t) => t.name === trade) || {};
-    setSearch({ siteId: site._id, siteName: site.name, siteAddress: site.address, trade, tradeEntry, loading: true, results: [] });
-    setTimeout(() => document.getElementById('search-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    setFindingFor({ siteId: site._id, trade });
     try {
       const data = await findTradesForSite(site._id, trade, distance, unit, maxRate < MAX_RATE ? maxRate : null);
-      setSearch({ siteId: site._id, siteName: site.name, siteAddress: site.address, trade, tradeEntry, loading: false, results: data.results, requiredDate: data.requiredDate ?? null });
+      navigate('/dashboard/contractor/trade-search', {
+        state: {
+          results:      data.results,
+          siteName:     site.name,
+          siteAddress:  site.address,
+          siteId:       site._id,
+          trade,
+          tradeEntry,
+          requiredDate: data.requiredDate ?? null,
+          unit,
+          mySiteNames:  sites.map((s) => s.name),
+        },
+      });
     } catch (err) {
       const noLocation = err?.response?.status === 422;
-      setSearch({ siteName: site.name, trade, loading: false, results: [], noLocation, error: !noLocation });
+      alert(noLocation
+        ? (lang === 'es' ? 'No se pudo determinar la ubicación de la obra.' : 'Site location could not be determined from its address.')
+        : (lang === 'es' ? 'Error en la búsqueda. Inténtalo de nuevo.' : 'Search failed. Please try again.')
+      );
+    } finally {
+      setFindingFor(null);
     }
   };
 
@@ -692,7 +667,7 @@ export default function ContractorDashboard() {
                       onManageTrades={setManageSite}
                       onUpdatePhoto={setPhotoSite}
                       onWorkPlan={(siteId) => navigate(`/dashboard/contractor/work-plan/${siteId}`)}
-                      searchState={search?.loading ? search : null}
+                      searchState={findingFor?.siteId === site._id ? { loading: true } : null}
                     />
                   ))}
                 </div>
@@ -705,17 +680,6 @@ export default function ContractorDashboard() {
                   t={t.findTrade}
                 />
 
-                {search && (
-                  <div id="search-results">
-                    <SearchResults
-                      search={search}
-                      unit={unit}
-                      t={t}
-                      onClose={() => setSearch(null)}
-                      onOpenCalendar={(proId, siteName, siteAddress, siteId, requiredDate) => setCalendarPro({ proId, siteName, siteAddress, siteId, requiredDate })}
-                    />
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -744,17 +708,6 @@ export default function ContractorDashboard() {
           site={photoSite}
           onClose={() => setPhotoSite(null)}
           onUpdated={handleTradesUpdated}
-        />
-      )}
-      {calendarPro && (
-        <TradeCalendarModal
-          tradeId={calendarPro.proId}
-          siteName={calendarPro.siteName}
-          siteAddress={calendarPro.siteAddress}
-          siteId={calendarPro.siteId}
-          requiredDate={calendarPro.requiredDate ?? null}
-          mySiteNames={sites.map((s) => s.name)}
-          onClose={() => setCalendarPro(null)}
         />
       )}
       {applicationsOpen && (

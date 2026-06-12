@@ -99,9 +99,10 @@ export default function AddSiteModal({ onClose, onCreated }) {
   const [error,        setError]        = useState('');
 
   // budget mini-modal
-  const [pendingTrade, setPendingTrade] = useState(null);
-  const [budgetType,   setBudgetType]   = useState('amount');
-  const [budgetValue,  setBudgetValue]  = useState('');
+  const [pendingTrade,  setPendingTrade]  = useState(null);
+  const [budgetType,    setBudgetType]    = useState('amount');
+  const [budgetValue,   setBudgetValue]   = useState('');
+  const [workersValue,  setWorkersValue]  = useState('');
 
   useEffect(() => {
     const h = (e) => {
@@ -121,11 +122,12 @@ export default function AddSiteModal({ onClose, onCreated }) {
       setPendingTrade(name);
       setBudgetType('amount');
       setBudgetValue('');
+      setWorkersValue('');
     }
   };
 
   const confirmAdd = (skip = false) => {
-    const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null };
+    const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null, workers_no: null };
     if (!skip && budgetValue) {
       const num = parseFloat(budgetValue);
       if (!isNaN(num) && num > 0) {
@@ -134,6 +136,8 @@ export default function AddSiteModal({ onClose, onCreated }) {
         else                         entry.totalHours = num;
       }
     }
+    const w = parseInt(workersValue);
+    if (!isNaN(w) && w > 0) entry.workers_no = w;
     setTrades((prev) => [...prev, entry]);
     setPendingTrade(null);
   };
@@ -284,7 +288,7 @@ export default function AddSiteModal({ onClose, onCreated }) {
                 </button>
               </div>
 
-              <div className="relative mb-5">
+              <div className="relative mb-3">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">
                   {budgetType === 'amount' ? '$' : '⏱'}
                 </span>
@@ -295,6 +299,17 @@ export default function AddSiteModal({ onClose, onCreated }) {
                   className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-300 transition"
                   autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmAdd(); } }}
+                />
+              </div>
+
+              {/* Workers needed */}
+              <div className="relative mb-5">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm select-none">👷</span>
+                <input
+                  type="number" min="1" step="1"
+                  value={workersValue} onChange={(e) => setWorkersValue(e.target.value)}
+                  placeholder={lang === 'es' ? 'Número de trabajadores' : 'Number of workers'}
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-300 transition"
                 />
               </div>
             </div>
