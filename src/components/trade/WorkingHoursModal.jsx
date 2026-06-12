@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
 import { submitWorkLog } from '../../api/trade.js';
+import { toast } from '../../utils/toast.js';
 
 // ── i18n ─────────────────────────────────────────────────────────────────────
 const content = {
@@ -24,6 +25,8 @@ const content = {
     error:    'Failed to send. Please try again.',
     hours:    (h) => `${h} hr${h !== 1 ? 's' : ''} recorded`,
     bgRunning: '⏱️ Timer running in background',
+    toastOk:  (name) => `💵 Payment approval request sent to ${name || 'contractor'}`,
+    toastErr: '❌ Failed to send work log. Please try again.',
   },
   es: {
     badge:  '⏱️ Registro de Trabajo',
@@ -44,6 +47,8 @@ const content = {
     error:    'Error al enviar. Inténtalo de nuevo.',
     hours:    (h) => `${h} hr${h !== 1 ? 's' : ''} registradas`,
     bgRunning: '⏱️ Temporizador activo en segundo plano',
+    toastOk:  (name) => `💵 Solicitud enviada a ${name || 'el contratista'}`,
+    toastErr: '❌ Error al enviar el registro. Inténtalo de nuevo.',
   },
 };
 
@@ -162,15 +167,18 @@ export default function WorkingHoursModal({
     setSending(true);
     setResult('');
     try {
-      await submitWorkLog({ siteId, date, totalSeconds: finalSec });
+      const res = await submitWorkLog({ siteId, date, totalSeconds: finalSec });
       setResult(t.success);
       // Reset background timer after successful send
       bgTimerRef.current = { acc: 0, start: null, bookingKey: null };
       setTimerRunning(false);
       onSent?.();        // tell parent to disable the clock icon
+      // Show a sweet toast with the contractor's company name
+      toast.success(t.toastOk(res?.contractorName), { duration: 5000 });
       setTimeout(onClose, 2200);
     } catch {
       setResult(t.error);
+      toast.error(t.toastErr, { duration: 4000 });
     } finally {
       setSending(false);
     }
