@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { updateSchedule, findJobs, requestReschedule, removeBooking, getTradeChatBySite, uploadChatFile as tradeUploadChatFile } from '../../api/trade.js';
+import { updateSchedule, findJobs, requestReschedule, removeBooking, getTradeChatBySite, uploadChatFile as tradeUploadChatFile, checkWorkLog } from '../../api/trade.js';
 import useUIStore from '../../stores/uiStore.js';
 import useAuthStore from '../../stores/authStore.js';
 import { toast } from '../../utils/toast.js';
@@ -219,6 +219,17 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   const [deleting,         setDeleting]         = useState(false);   // delete in-flight
   const [workingHoursOpen, setWorkingHoursOpen] = useState(false);   // working-hours modal
 
+  // ── Background timer — persists while modal is closed ─────────────────────
+  // Stores timestamps so we can recalculate elapsed time without a real background interval.
+  const bgTimerRef = useRef({ acc: 0, start: null, bookingKey: null });
+  const [timerRunning, setTimerRunning] = useState(false);  // drives clock-icon pulse
+
+  // ── Clock-disabled check — queried from server when a booked day is tapped ─
+  // Prevents opening the clock when a pending payment message already exists for
+  // this trade + site + date combination.
+  const [clockDisabled, setClockDisabled] = useState(false);
+  const [clockChecking, setClockChecking] = useState(false);
+
   // Merge dates approved via the messages modal into the orange calendar set
   useEffect(() => {
     if (!approvedDates.length) return;
@@ -228,6 +239,22 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
       return next;
     });
   }, [approvedDates]);
+
+  // When a booked day is tapped, check the server for an existing pending payment
+  // message for this trade + site + date. If one exists, the clock icon is disabled.
+  useEffect(() => {
+    if (!activeBookedKey) { setClockDisabled(false); return; }
+    const bk = bookingDateMap[activeBookedKey];
+    if (!bk?.siteId) { setClockDisabled(false); return; }
+    let cancelled = false;
+    setClockChecking(true);
+    setClockDisabled(false);
+    checkWorkLog(String(bk.siteId), activeBookedKey)
+      .then(({ hasPending }) => { if (!cancelled) setClockDisabled(hasPending); })
+      .catch(() => { if (!cancelled) setClockDisabled(false); })
+      .finally(() => { if (!cancelled) setClockChecking(false); });
+    return () => { cancelled = true; };
+  }, [activeBookedKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFindJobs = useCallback(async () => {
     setJobsLoading(true);
@@ -488,17 +515,41 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                   </svg>
                 </button>
 
-                {/* ⏱️ Working hours */}
-                <button
-                  onClick={() => setWorkingHoursOpen(true)}
-                  title="Log working hours"
-                  className="flex-shrink-0 w-8 h-8 rounded-xl bg-violet-100 hover:bg-violet-200 text-violet-600 flex items-center justify-center transition active:scale-95 shadow-sm shadow-violet-100"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <circle cx="12" cy="12" r="9" strokeLinecap="round" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
-                  </svg>
-                </button>
+                {/* ⏱️ Working hours — disabled if a pending payment already exists for this day */}
+                {(() => {
+                  const isActive   = timerRunning && bgTimerRef.current.bookingKey === activeBookedKey;
+                  const isDisabled = clockDisabled && !isActive; // never disable if timer is already running
+                  const title      = clockChecking  ? 'Checking…'
+                                   : isDisabled     ? 'Hours already submitted for this day — awaiting approval'
+                                   : isActive       ? 'Timer running — tap to open'
+                                   :                  'Log working hours';
+                  return (
+                    <button
+                      onClick={() => { if (!isDisabled && !clockChecking) setWorkingHoursOpen(true); }}
+                      disabled={isDisabled || clockChecking}
+                      title={title}
+                      className={`relative flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition shadow-sm ${
+                        isDisabled || clockChecking
+                          ? 'bg-slate-100 text-slate-300 cursor-not-allowed opacity-50'
+                          : isActive
+                            ? 'bg-violet-500 text-white shadow-violet-300 active:scale-95'
+                            : 'bg-violet-100 hover:bg-violet-200 text-violet-600 shadow-violet-100 active:scale-95'
+                      }`}
+                    >
+                      {isActive && !isDisabled && (
+                        <span className="absolute inset-0 rounded-xl bg-violet-400 animate-ping opacity-40 pointer-events-none" />
+                      )}
+                      {clockChecking ? (
+                        <span className="w-3 h-3 border-2 border-slate-300 border-t-slate-400 rounded-full animate-spin" />
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 relative" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <circle cx="12" cy="12" r="9" strokeLinecap="round" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })()}
 
                 {/* 🗑️ Delete booking */}
                 <button
@@ -622,7 +673,11 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             siteId={String(bk.siteId ?? '')}
             professionality={professionality}
             hourlyRate={hourlyRate}
+            bgTimerRef={bgTimerRef}
+            timerRunning={timerRunning}
+            setTimerRunning={setTimerRunning}
             onClose={() => setWorkingHoursOpen(false)}
+            onSent={() => setClockDisabled(true)}
           />
         );
       })()}

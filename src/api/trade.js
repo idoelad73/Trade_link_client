@@ -12,4 +12,8 @@ export const requestReschedule = (siteId, newDate)   => api.post('/trade/resched
 export const removeBooking     = (siteId)            => api.delete('/trade/bookings', { data: { siteId } }).then(r => r.data);
 export const getTradeChatBySite = (siteId) => api.get(`/chat/trade/${siteId}`).then(r => r.data);
 export const uploadChatFile     = (formData) => api.post('/chat/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
-export const submitWorkLog      = (payload)  => api.post('/trade/work-log', payload).then(r => r.data);
+export const checkWorkLog            = (siteId, date) => api.get(`/trade/work-log/check?siteId=${siteId}&date=${date}`).then(r => r.data);
+export const submitWorkLog           = (payload)  => api.post('/trade/work-log', payload).then(r => r.data);
+export const getPaymentApprovedCount = ()  => api.get('/trade/payment-approved/count').then(r => r.data.count);
+// Returns { orders: [...approved], rejected: [...rejectedNotices] }
+export const getPaymentApproved      = ()  => api.get('/trade/payment-approved').then(r => r.data);

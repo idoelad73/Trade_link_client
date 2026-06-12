@@ -16,12 +16,14 @@ const content = {
       send:     'Send for Approval',
       sending:  'Sending…',
       cancel:   'Cancel',
+      closeRun: 'Close (timer keeps running)',
     },
     noRate:   'No hourly rate set — order sum will be $0.',
     noTime:   'Start the timer first.',
     success:  '✅ Work log sent for approval!',
     error:    'Failed to send. Please try again.',
     hours:    (h) => `${h} hr${h !== 1 ? 's' : ''} recorded`,
+    bgRunning: '⏱️ Timer running in background',
   },
   es: {
     badge:  '⏱️ Registro de Trabajo',
@@ -34,12 +36,14 @@ const content = {
       send:     'Enviar para Aprobación',
       sending:  'Enviando…',
       cancel:   'Cancelar',
+      closeRun: 'Cerrar (temporizador activo)',
     },
     noRate:   'Sin tarifa horaria — el total será $0.',
     noTime:   'Primero inicia el temporizador.',
     success:  '✅ ¡Registro enviado para aprobación!',
     error:    'Error al enviar. Inténtalo de nuevo.',
     hours:    (h) => `${h} hr${h !== 1 ? 's' : ''} registradas`,
+    bgRunning: '⏱️ Temporizador activo en segundo plano',
   },
 };
 
@@ -54,6 +58,12 @@ function formatClock(totalSeconds) {
 function toHours(totalSeconds) {
   return parseFloat((totalSeconds / 3600).toFixed(2));
 }
+function currentBgSeconds(bgTimer) {
+  if (bgTimer.start !== null) {
+    return bgTimer.acc + Math.floor((Date.now() - bgTimer.start) / 1000);
+  }
+  return bgTimer.acc;
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function WorkingHoursModal({
@@ -62,57 +72,102 @@ export default function WorkingHoursModal({
   siteAddress,
   siteId,
   professionality,
-  hourlyRate,   // optional — passed from tradeData
+  hourlyRate,
+  // Background timer shared with TradeSchedule so state survives close/reopen
+  bgTimerRef,         // { acc, start, bookingKey }
+  timerRunning,       // boolean (for icon pulse in parent)
+  setTimerRunning,    // (bool) => void
   onClose,
+  onSent,             // called after successful submission — parent can disable clock
 }) {
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
   const user = useAuthStore((s) => s.user);
 
-  // ── Timer state ─────────────────────────────────────────────────────────
-  const [isRunning,      setIsRunning]      = useState(false);
-  const [displaySeconds, setDisplaySeconds] = useState(0);
-  const accRef      = useRef(0);   // accumulated seconds from finished segments
-  const runStartRef = useRef(null);// Date.now() when current segment started
+  // ── Local display interval (recreated on every open) ─────────────────────
   const intervalRef = useRef(null);
 
-  // Cleanup interval on unmount
-  useEffect(() => () => clearInterval(intervalRef.current), []);
+  // On open: resume from bgTimerRef if this booking is active, else start fresh
+  const isSameBooking = bgTimerRef.current.bookingKey === date;
+  const [isRunning,      setIsRunning]      = useState(() => isSameBooking && bgTimerRef.current.start !== null);
+  const [displaySeconds, setDisplaySeconds] = useState(() => isSameBooking ? currentBgSeconds(bgTimerRef.current) : 0);
 
+  // If bgTimerRef belongs to a different booking, reset it silently on open
+  useEffect(() => {
+    if (!isSameBooking && bgTimerRef.current.bookingKey !== null) {
+      // Stop any running timer for the other booking before opening this one
+      bgTimerRef.current = { acc: 0, start: null, bookingKey: null };
+      setTimerRunning(false);
+    }
+    bgTimerRef.current.bookingKey = date;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Start display interval if we opened while timer was already running
+  useEffect(() => {
+    if (isRunning && bgTimerRef.current.start !== null) {
+      intervalRef.current = setInterval(() => {
+        setDisplaySeconds(currentBgSeconds(bgTimerRef.current));
+      }, 500);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Escape: close modal — if running, leave timer in background
+  useEffect(() => {
+    const h = (e) => { if (e.key === 'Escape') handleClose(); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Timer controls ────────────────────────────────────────────────────────
   const handleStart = () => {
     if (isRunning) return;
-    runStartRef.current = Date.now();
+    bgTimerRef.current.start = Date.now();
+    bgTimerRef.current.bookingKey = date;
     setIsRunning(true);
+    setTimerRunning(true);
     intervalRef.current = setInterval(() => {
-      const seg = Math.floor((Date.now() - runStartRef.current) / 1000);
-      setDisplaySeconds(accRef.current + seg);
-    }, 500); // 500 ms for smooth feel
+      setDisplaySeconds(currentBgSeconds(bgTimerRef.current));
+    }, 500);
   };
 
   const handleStop = () => {
     if (!isRunning) return;
     clearInterval(intervalRef.current);
-    const seg = Math.floor((Date.now() - runStartRef.current) / 1000);
-    accRef.current += seg;
-    setDisplaySeconds(accRef.current);
+    // Commit elapsed seconds to accumulated total
+    const elapsed = Math.floor((Date.now() - bgTimerRef.current.start) / 1000);
+    bgTimerRef.current.acc  += elapsed;
+    bgTimerRef.current.start = null;
+    setDisplaySeconds(bgTimerRef.current.acc);
     setIsRunning(false);
+    setTimerRunning(false);
   };
 
-  // ── Submit state ─────────────────────────────────────────────────────────
-  const [sending,  setSending]  = useState(false);
-  const [result,   setResult]   = useState(''); // '' | success msg | error msg
+  // Close: if timer is running, leave it in the background (bgTimerRef.start stays set)
+  const handleClose = () => {
+    clearInterval(intervalRef.current); // stop the display interval
+    // timerRunning stays true — clock icon in parent keeps pulsing
+    onClose();
+  };
+
+  // ── Submit ────────────────────────────────────────────────────────────────
+  const [sending, setSending] = useState(false);
+  const [result,  setResult]  = useState('');
 
   const handleSend = async () => {
     if (displaySeconds === 0) { setResult(t.noTime); return; }
     // Auto-stop if still running
     if (isRunning) handleStop();
-    // Use final accumulated value (handleStop updated accRef synchronously)
-    const finalSec = accRef.current;
+    const finalSec = bgTimerRef.current.acc;
     setSending(true);
     setResult('');
     try {
       await submitWorkLog({ siteId, date, totalSeconds: finalSec });
       setResult(t.success);
+      // Reset background timer after successful send
+      bgTimerRef.current = { acc: 0, start: null, bookingKey: null };
+      setTimerRunning(false);
+      onSent?.();        // tell parent to disable the clock icon
       setTimeout(onClose, 2200);
     } catch {
       setResult(t.error);
@@ -128,122 +183,105 @@ export default function WorkingHoursModal({
   const hoursFloat  = toHours(displaySeconds);
   const orderSum    = hourlyRate ? (hoursFloat * hourlyRate).toFixed(2) : null;
 
-  // Ring color theme
   const ringColor = isRunning ? 'ring-violet-400 shadow-violet-100'
                   : hasTime   ? 'ring-amber-400  shadow-amber-100'
                               : 'ring-slate-200  shadow-transparent';
-  const bgColor   = isRunning ? 'bg-violet-50'
-                  : hasTime   ? 'bg-amber-50'
-                              : 'bg-slate-50';
-  const numColor  = isRunning ? 'text-violet-700'
-                  : hasTime   ? 'text-amber-700'
-                              : 'text-slate-400';
+  const bgColor   = isRunning ? 'bg-violet-50' : hasTime ? 'bg-amber-50' : 'bg-slate-50';
+  const numColor  = isRunning ? 'text-violet-700' : hasTime ? 'text-amber-700' : 'text-slate-400';
   const badgeColor = isRunning ? 'bg-violet-100 text-violet-600 border-violet-200'
                    : hasTime   ? 'bg-amber-100  text-amber-600  border-amber-200'
                                : 'bg-slate-100  text-slate-400  border-slate-200';
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget && !isRunning && !sending) onClose(); }}
+      className="fixed inset-0 z-[70] flex items-center justify-center p-3 bg-black/50 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
     >
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden">
 
         {/* Top accent */}
-        <div className="h-1.5 w-full bg-gradient-to-r from-violet-500 via-sky-400 to-amber-400" />
+        <div className="h-1 w-full bg-gradient-to-r from-violet-500 via-sky-400 to-amber-400" />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <div>
-            <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-violet-100 text-violet-700 border border-violet-200 mb-1">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200">
               {t.badge}
-            </div>
-            <h2 className="text-base font-extrabold text-slate-800">{t.title}</h2>
+            </span>
+            <h2 className="text-sm font-extrabold text-slate-800">{t.title}</h2>
           </div>
+          {/* × always enabled — timer keeps running in background */}
           <button
-            onClick={onClose}
-            disabled={isRunning || sending}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-slate-500 transition text-lg leading-none"
+            onClick={handleClose}
+            className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition text-base leading-none flex-shrink-0"
           >×</button>
         </div>
 
-        {/* Info card */}
-        <div className="px-6 py-3 bg-slate-50 border-b border-slate-100 space-y-1.5">
-          <Row icon="👤" label={t.labels.name}    value={user?.fullName} bold />
-          {professionality && <Row icon="🔧" label={t.labels.trade}   value={professionality} />}
-          <Row icon="📅" label={t.labels.date}    value={date} />
-          <Row icon="🏗️" label={t.labels.site}    value={siteName} bold />
-          {siteAddress && <Row icon="📍" label={t.labels.address} value={siteAddress} small />}
+        {/* Info card — compact single line */}
+        <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-x-4 gap-y-0.5">
+          <span className="text-[11px] text-slate-500"><span className="font-bold text-slate-400">Site</span> {siteName}</span>
+          <span className="text-[11px] text-slate-500"><span className="font-bold text-slate-400">Date</span> {date}</span>
+          {professionality && <span className="text-[11px] text-slate-500"><span className="font-bold text-slate-400">Trade</span> {professionality}</span>}
         </div>
 
-        {/* Clock */}
-        <div className="px-6 pt-6 pb-3 flex flex-col items-center gap-3">
-
-          {/* Digital ring */}
-          <div className={`relative w-40 h-40 rounded-full flex items-center justify-center ring-4 ring-offset-2 shadow-lg transition-all duration-300 ${ringColor} ${bgColor}`}>
-            {/* Pulsing glow when running */}
+        {/* Clock + status row */}
+        <div className="px-4 pt-3 pb-2 flex items-center gap-4">
+          {/* Clock circle — smaller */}
+          <div className={`relative w-24 h-24 rounded-full flex items-center justify-center ring-4 ring-offset-2 shadow-md transition-all duration-300 flex-shrink-0 ${ringColor} ${bgColor}`}>
             {isRunning && (
               <div className="absolute inset-0 rounded-full ring-4 ring-violet-300 animate-ping opacity-30" />
             )}
             <div className="relative flex flex-col items-center">
-              <span className={`font-mono font-extrabold text-3xl tracking-widest leading-none transition-colors duration-300 ${numColor}`}>
+              <span className={`font-mono font-extrabold text-lg tracking-widest leading-none transition-colors duration-300 ${numColor}`}>
                 {formatClock(displaySeconds)}
               </span>
               {hasTime && (
-                <span className="text-[11px] font-semibold text-slate-400 mt-1">
+                <span className="text-[10px] font-semibold text-slate-400 mt-0.5">
                   {t.hours(hoursFloat)}
                 </span>
               )}
             </div>
           </div>
 
-          {/* Status badge */}
-          <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full border transition-colors duration-300 ${badgeColor}`}>
-            {isRunning && (
-              <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />
-            )}
-            {statusText}
-          </div>
-
-          {/* Order preview */}
-          {hasTime && orderSum !== null && (
-            <div className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-4 py-1.5 rounded-xl">
-              💰 {t.labels.date === 'Date' ? 'Estimated total' : 'Total estimado'}: <span className="font-extrabold">${orderSum}</span>
-              <span className="text-emerald-500 font-normal ml-1">({hoursFloat}h × ${hourlyRate}/hr)</span>
+          {/* Right side: status + estimated sum */}
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <div className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${badgeColor}`}>
+              {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />}
+              {statusText}
             </div>
-          )}
-          {!hourlyRate && (
-            <p className="text-[10px] text-slate-400 text-center px-2">{t.noRate}</p>
-          )}
+
+            {isRunning && (
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-violet-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse flex-shrink-0" />
+                {t.bgRunning}
+              </div>
+            )}
+
+            {hasTime && orderSum !== null && (
+              <div className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                💰 <span className="font-extrabold">${orderSum}</span>
+                <span className="text-emerald-500 font-normal ml-1">({hoursFloat}h × ${hourlyRate}/hr)</span>
+              </div>
+            )}
+            {!hourlyRate && <p className="text-[10px] text-slate-400">{t.noRate}</p>}
+          </div>
         </div>
 
         {/* Buttons */}
-        <div className="px-6 pb-6 space-y-2.5">
-
-          {/* Start / Stop row */}
+        <div className="px-4 pb-3 space-y-2">
           <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={handleStart}
-              disabled={isRunning || sent}
-              className="flex items-center justify-center gap-1.5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow shadow-emerald-200 transition-all active:scale-95"
-            >
+            <button onClick={handleStart} disabled={isRunning || sent}
+              className="flex items-center justify-center gap-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow shadow-emerald-200 transition-all active:scale-95">
               {t.btn.start}
             </button>
-            <button
-              onClick={handleStop}
-              disabled={!isRunning}
-              className="flex items-center justify-center gap-1.5 py-2.5 rounded-2xl bg-red-500 hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow shadow-red-200 transition-all active:scale-95"
-            >
+            <button onClick={handleStop} disabled={!isRunning}
+              className="flex items-center justify-center gap-1 py-2 rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow shadow-red-200 transition-all active:scale-95">
               {t.btn.stop}
             </button>
           </div>
 
-          {/* Send for approval */}
-          <button
-            onClick={handleSend}
-            disabled={sending || !hasTime || isRunning || sent}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-gradient-to-r from-violet-500 to-sky-400 hover:from-violet-400 hover:to-sky-300 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow shadow-violet-200 transition-all active:scale-[0.99]"
-          >
+          <button onClick={handleSend} disabled={sending || !hasTime || isRunning || sent}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-sky-400 hover:from-violet-400 hover:to-sky-300 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow shadow-violet-200 transition-all active:scale-[0.99]">
             {sending ? (
               <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />{t.btn.sending}</>
             ) : (
@@ -251,24 +289,23 @@ export default function WorkingHoursModal({
             )}
           </button>
 
-          {/* Result message */}
           {result && (
-            <div className={`rounded-xl px-4 py-2.5 text-xs font-semibold text-center border transition-all ${
-              sent
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                : 'bg-red-50 border-red-200 text-red-600'
+            <div className={`rounded-xl px-3 py-2 text-xs font-semibold text-center border ${
+              sent ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-600'
             }`}>
               {result}
             </div>
           )}
 
-          {/* Cancel */}
-          {!isRunning && !sent && (
-            <button
-              onClick={onClose}
-              className="w-full py-2.5 rounded-2xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition text-center"
-            >
-              {t.btn.cancel}
+          {/* Close button — label changes based on running state */}
+          {!sent && (
+            <button onClick={handleClose}
+              className={`w-full py-2 rounded-xl border font-medium text-xs transition text-center ${
+                isRunning
+                  ? 'border-violet-200 text-violet-500 hover:bg-violet-50 bg-violet-50/50'
+                  : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+              }`}>
+              {isRunning ? t.btn.closeRun : t.btn.cancel}
             </button>
           )}
         </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getSites, findTradesForSite, updateSite, getApplications } from '../../api/contractor.js';
+import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount } from '../../api/contractor.js';
 import ContractorInfoModal from '../../components/contractor/ContractorInfoModal.jsx';
 import AddSiteModal from '../../components/contractor/AddSiteModal.jsx';
 import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx';
@@ -474,6 +474,7 @@ export default function ContractorDashboard() {
   const [selection,            setSelection]            = useState(null);
   const [applicationsOpen,     setApplicationsOpen]     = useState(false);
   const [applicationsCount,    setApplicationsCount]    = useState(0);
+  const [pendingPayments,      setPendingPayments]      = useState(0);
 
   const refreshApplicationCount = () =>
     getApplications()
@@ -482,6 +483,11 @@ export default function ContractorDashboard() {
           applications.filter(a => a.status === 'pending').length + reschedules.length
         )
       ).catch(() => {});
+
+  const refreshPaymentCount = () =>
+    getPaymentApprovalsCount()
+      .then((n) => setPendingPayments(n))
+      .catch(() => {});
 
   const refreshSites = () =>
     getSites().then((loaded) =>
@@ -500,7 +506,7 @@ export default function ContractorDashboard() {
   const kmValue     = Math.round(distance * 1.609);
   const displayDist = unit === 'mi' ? `${distance} mi` : `${kmValue} km`;
 
-  useEffect(() => { refreshApplicationCount(); }, []);
+  useEffect(() => { refreshApplicationCount(); refreshPaymentCount(); }, []);
 
   useEffect(() => {
     if (activeView === 'allSites') {
@@ -593,6 +599,20 @@ export default function ContractorDashboard() {
           </div>
 
           <div className="flex items-center gap-2 pl-2 sm:pl-4 border-l border-slate-100 flex-shrink-0">
+
+            {/* 💲 Payment approvals icon */}
+            <button
+              onClick={() => navigate('/dashboard/contractor/payment-approvals')}
+              className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 transition active:scale-95"
+              title="Payment Approvals"
+            >
+              <span className="text-xl leading-none select-none">💵</span>
+              {pendingPayments > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow border-2 border-white leading-none">
+                  {pendingPayments > 99 ? '99+' : pendingPayments}
+                </span>
+              )}
+            </button>
 
             <button
               onClick={() => setApplicationsOpen(true)}

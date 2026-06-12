@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getMe, updateLocation } from '../../api/trade.js';
+import { getMe, updateLocation, getPaymentApprovedCount } from '../../api/trade.js';
 import TradeInfoModal from '../../components/trade/TradeInfoModal.jsx';
 import TradeSchedule from '../../components/trade/TradeSchedule.jsx';
 import AvailabilityMessagesModal from '../../components/trade/AvailabilityMessagesModal.jsx';
@@ -39,15 +39,17 @@ export default function TradeDashboard() {
     { id: 'schedule', label: t.tabs.schedule, icon: '📅', modal: false },
   ];
 
-  const [activeView,    setActiveView]    = useState('schedule');
-  const [modalOpen,     setModalOpen]     = useState(false);
-  const [messagesOpen,  setMessagesOpen]  = useState(false);
-  const [tradeData,     setTradeData]     = useState(null);
-  const [dataLoading,   setDataLoading]   = useState(true);
-  const [approvedDates, setApprovedDates] = useState([]);
+  const [activeView,      setActiveView]      = useState('schedule');
+  const [modalOpen,       setModalOpen]       = useState(false);
+  const [messagesOpen,    setMessagesOpen]    = useState(false);
+  const [tradeData,       setTradeData]       = useState(null);
+  const [dataLoading,     setDataLoading]     = useState(true);
+  const [approvedDates,   setApprovedDates]   = useState([]);
+  const [paymentCount,    setPaymentCount]    = useState(0);
 
   useEffect(() => {
     getMe().then(setTradeData).catch(console.error).finally(() => setDataLoading(false));
+    getPaymentApprovedCount().then(setPaymentCount).catch(() => {});
   }, []);
 
   // Live location updates — every 60 s, only when the trade pro has consented
@@ -132,6 +134,20 @@ export default function TradeDashboard() {
                   <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Availability</span>
                   <span className="text-xs font-extrabold text-amber-500 group-hover:text-amber-600">{tradeData.availabilityMessages} msg{tradeData.availabilityMessages !== 1 ? 's' : ''}</span>
                 </div>
+              )}
+            </button>
+
+            {/* 💵 Payment approved icon */}
+            <button
+              onClick={() => navigate('/dashboard/trade/payment-approved')}
+              className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 transition active:scale-95 flex-shrink-0"
+              title="Approved Payments"
+            >
+              <span className="text-xl leading-none select-none">💵</span>
+              {paymentCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow border-2 border-white leading-none">
+                  {paymentCount > 99 ? '99+' : paymentCount}
+                </span>
               )}
             </button>
 

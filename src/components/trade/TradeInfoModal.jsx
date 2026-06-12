@@ -10,14 +10,15 @@ const content = {
     titleView:  'Account Details',
     titleEdit:  'Update Details',
     labels: {
-      name:      'Full Name',
-      email:     'Email',
-      phone:     'Phone',
-      trade:     'Trade',
-      address:   'Address',
-      photo:     'Profile Photo',
-      photoHint: 'Click to change photo',
-      docs:      'Documents',
+      name:       'Full Name',
+      email:      'Email',
+      phone:      'Phone',
+      trade:      'Trade',
+      address:    'Address',
+      hourlyRate: 'Hourly Rate ($/hr)',
+      photo:      'Profile Photo',
+      photoHint:  'Click to change photo',
+      docs:       'Documents',
       license:   'License',
       insurance: 'Insurance',
       cv:        'CV',
@@ -35,14 +36,15 @@ const content = {
     titleView:  'Detalles de Cuenta',
     titleEdit:  'Actualizar Detalles',
     labels: {
-      name:      'Nombre Completo',
-      email:     'Correo',
-      phone:     'Teléfono',
-      trade:     'Oficio',
-      address:   'Dirección',
-      photo:     'Foto de Perfil',
-      photoHint: 'Clic para cambiar foto',
-      docs:      'Documentos',
+      name:       'Nombre Completo',
+      email:      'Correo',
+      phone:      'Teléfono',
+      trade:      'Oficio',
+      address:    'Dirección',
+      hourlyRate: 'Tarifa por Hora ($/hr)',
+      photo:      'Foto de Perfil',
+      photoHint:  'Clic para cambiar foto',
+      docs:       'Documentos',
       license:   'Licencia',
       insurance: 'Seguro',
       cv:        'CV',
@@ -89,7 +91,7 @@ export default function TradeInfoModal({ onClose }) {
     getMe()
       .then((data) => {
         setTrade(data);
-        setForm({ fullName: data.fullName, phone: data.phone, address: data.address, professionality: data.professionality });
+        setForm({ fullName: data.fullName, phone: data.phone, address: data.address, professionality: data.professionality, hourlyRate: data.hourlyRate ?? '' });
       })
       .finally(() => setLoading(false));
   }, []);
@@ -164,6 +166,13 @@ export default function TradeInfoModal({ onClose }) {
               <Field label={t.labels.phone}   value={trade?.phone} />
               <Field label={t.labels.trade}   value={trade?.professionality} />
               <Field label={t.labels.address} value={trade?.address} />
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">{t.labels.hourlyRate}</p>
+                {trade?.hourlyRate != null
+                  ? <p className="text-sm font-extrabold text-emerald-600">${trade.hourlyRate}<span className="text-xs font-normal text-slate-400 ml-0.5">/hr</span></p>
+                  : <p className="text-sm text-slate-400">—</p>
+                }
+              </div>
               <div className="grid grid-cols-2 gap-4 pt-1">
                 <div>
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{t.labels.docs}</p>
@@ -230,6 +239,21 @@ export default function TradeInfoModal({ onClose }) {
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.address}</label>
                 <input className={inputCls} value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.hourlyRate}</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-semibold text-sm pointer-events-none">$</span>
+                  <input
+                    className={`${inputCls} pl-8`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={form.hourlyRate}
+                    onChange={(e) => setForm((f) => ({ ...f, hourlyRate: e.target.value }))}
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.trade}</label>

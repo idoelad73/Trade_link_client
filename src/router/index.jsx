@@ -24,6 +24,8 @@ import TradeDashboard from '../pages/dashboard/TradeDashboard';
 import WorkPlanPage from '../pages/dashboard/WorkPlanPage';
 import JobResultsPage from '../pages/dashboard/JobResultsPage';
 import TradeSearchResultsPage from '../pages/dashboard/TradeSearchResultsPage';
+import PaymentApprovalsPage from '../pages/dashboard/PaymentApprovalsPage';
+import TradePaymentApprovedPage from '../pages/dashboard/TradePaymentApprovedPage';
 import ProjectsShowcase from '../pages/ProjectsShowcase';
 import TradesShowcase from '../pages/TradesShowcase';
 
@@ -41,9 +43,11 @@ const router = createBrowserRouter(
       {/* Dashboards */}
       <Route path="/dashboard/contractor"                   element={<ContractorDashboard />} />
       <Route path="/dashboard/contractor/work-plan/:siteId" element={<WorkPlanPage />} />
-      <Route path="/dashboard/contractor/trade-search"      element={<TradeSearchResultsPage />} />
-      <Route path="/dashboard/trade"                        element={<TradeDashboard />} />
+      <Route path="/dashboard/contractor/trade-search"        element={<TradeSearchResultsPage />} />
+      <Route path="/dashboard/contractor/payment-approvals"  element={<PaymentApprovalsPage />} />
+      <Route path="/dashboard/trade"                         element={<TradeDashboard />} />
       <Route path="/dashboard/trade/jobs"                  element={<JobResultsPage />} />
+      <Route path="/dashboard/trade/payment-approved"      element={<TradePaymentApprovedPage />} />
 
       {/* Auth — uncomment when pages are built */}
       {/* <Route element={<AuthLayout />}>
