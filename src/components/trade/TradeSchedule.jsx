@@ -85,7 +85,7 @@ const MONTHS = {
 
 const content = {
   en: {
-    legend:   { free: 'Available', busy: 'Off', booked: 'On Job', today: 'Today' },
+    legend:   { free: 'Available', busy: 'Off', booked: 'On Job', today: 'Today', approved: 'Hours Approved' },
     legendPending: 'Pending',
     hint:     'Tap a day to toggle',
     save:     'Save Schedule',
@@ -115,7 +115,7 @@ const content = {
     startAdjusted:  (d) => `⚠️ Non-working day — starts ${d}`,
   },
   es: {
-    legend:   { free: 'Disponible', busy: 'Libre no', booked: 'En obra', today: 'Hoy' },
+    legend:   { free: 'Disponible', busy: 'Libre no', booked: 'En obra', today: 'Hoy', approved: 'Horas Aprobadas' },
     legendPending: 'Pendiente',
     hint:     'Toca un día para cambiar',
     save:     'Guardar Calendario',
@@ -159,7 +159,7 @@ function buildCalendar(year, month) {
   return cells;
 }
 
-export default function TradeSchedule({ initialBusyDays = [], initialBookings = [], approvedDates = [], professionality = '', hourlyRate = null }) {
+export default function TradeSchedule({ initialBusyDays = [], initialBookings = [], approvedDates = [], approvedOrders = [], professionality = '', hourlyRate = null }) {
   const navigate = useNavigate();
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
@@ -196,6 +196,12 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
     const ds = b.dates?.length ? b.dates : (b.date ? [b.date] : []);
     ds.forEach(d => { bookingDateMap[d] = b; });
   });
+
+  // Fast lookup: "siteId_date" → true  for every approved tradehours_order
+  // Used to colour calendar cells light-blue and disable the clock icon.
+  const approvedOrderSet = new Set(
+    approvedOrders.map(o => `${o.siteId}_${o.date}`)
+  );
   const [dirty,    setDirty]    = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [saved,    setSaved]    = useState(false);
@@ -240,12 +246,24 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
     });
   }, [approvedDates]);
 
-  // When a booked day is tapped, check the server for an existing pending payment
-  // message for this trade + site + date. If one exists, the clock icon is disabled.
+  // When a booked day is tapped, disable the clock if:
+  //   a) An approved tradehours_order already exists for this site+date  (client-side, instant)
+  //   b) A pending payment message exists for this site+date              (server check)
   useEffect(() => {
     if (!activeBookedKey) { setClockDisabled(false); return; }
     const bk = bookingDateMap[activeBookedKey];
     if (!bk?.siteId) { setClockDisabled(false); return; }
+
+    const siteKey = `${String(bk.siteId)}_${activeBookedKey}`;
+
+    // (a) Already approved — disable immediately, no round-trip needed
+    if (approvedOrderSet.has(siteKey)) {
+      setClockDisabled(true);
+      setClockChecking(false);
+      return;
+    }
+
+    // (b) Check for a pending payment message on the server
     let cancelled = false;
     setClockChecking(true);
     setClockDisabled(false);
@@ -310,9 +328,11 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             if (!day) return <div key={`e-${i}`} />;
             const key          = toDateKey(yr, mo, day);
             const isPast       = new Date(yr, mo, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-            const dbBooking    = bookingDateMap[key];
-            const isBooked     = dbBooking?.status === 'booked' || (dbBooking && !dbBooking.status); // legacy = booked
-            const isOrder      = dbBooking?.status === 'order';
+            const dbBooking       = bookingDateMap[key];
+            const isBooked        = dbBooking?.status === 'booked' || (dbBooking && !dbBooking.status); // legacy = booked
+            const isOrder         = dbBooking?.status === 'order';
+            const isApprovedOrder = isBooked && dbBooking?.siteId &&
+              approvedOrderSet.has(`${String(dbBooking.siteId)}_${key}`);
             const isOff        = busyDays.has(key);
             const isToday      = key === todayKey;
             const isApplied    = appliedDates.has(key);
@@ -346,7 +366,9 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                 <button
                   onClick={handleDayClick}
                   className={`relative w-full aspect-square rounded-xl ring-1 ring-black/25 text-sm font-semibold flex items-center justify-center transition-all duration-150 active:scale-90 select-none
-                    ${isBooked
+                    ${isApprovedOrder
+                      ? `bg-sky-300 text-white shadow-sm shadow-sky-200 cursor-pointer ${activeBookedKey === key ? 'ring-2 ring-offset-1 ring-sky-500 scale-105' : 'hover:bg-sky-400'}`
+                      : isBooked
                       ? `bg-red-400 text-white shadow-sm shadow-red-200 cursor-pointer ${activeBookedKey === key ? 'ring-2 ring-offset-1 ring-red-600 scale-105' : 'hover:bg-red-500'}`
                       : isRescheduleNew
                         ? 'bg-violet-500 text-white shadow-sm shadow-violet-200 ring-2 ring-violet-600 ring-offset-1 scale-105'
@@ -426,6 +448,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.free}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-300" /><span className="text-xs text-slate-500 font-medium">{t.legend.busy}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-sky-300" /><span className="text-xs text-slate-500 font-medium">{t.legend.approved}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full border-2 border-sky-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.today}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-400" /><span className="text-xs text-slate-500 font-medium">{t.legendPending}</span></div>
           <span className="text-xs text-slate-400 ml-auto">{t.hint}</span>
@@ -519,8 +542,11 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                 {(() => {
                   const isActive   = timerRunning && bgTimerRef.current.bookingKey === activeBookedKey;
                   const isDisabled = clockDisabled && !isActive; // never disable if timer is already running
+                  const isApproved = activeBookedKey && bookingDateMap[activeBookedKey]?.siteId &&
+                    approvedOrderSet.has(`${String(bookingDateMap[activeBookedKey].siteId)}_${activeBookedKey}`);
                   const title      = clockChecking  ? 'Checking…'
-                                   : isDisabled     ? 'Hours already submitted for this day — awaiting approval'
+                                   : isApproved     ? 'Hours already approved for this day ✅'
+                                   : isDisabled     ? 'Hours already submitted — awaiting approval 🕐'
                                    : isActive       ? 'Timer running — tap to open'
                                    :                  'Log working hours';
                   return (

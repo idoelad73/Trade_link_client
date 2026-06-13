@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import useUIStore from '../../stores/uiStore.js';
 import { getPaymentApprovals, updatePaymentApproval } from '../../api/contractor.js';
+import { createPaymentIntent } from '../../api/stripe.js';
+import StripePaymentModal from '../../components/contractor/StripePaymentModal.jsx';
+import { toast } from '../../utils/toast.js';
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
 const content = {
@@ -19,6 +23,13 @@ const content = {
     hourSuffix: 'hr',
     noRate:     'No rate set',
     pending0:   'No pending approvals',
+    // SweetAlert2 confirm modal
+    confirmTitle:  (name, profession) => `Approve order for ${name}?`,
+    confirmText:   (profession, sum) => `${profession} · Total: $${sum}`,
+    confirmYes:    '✅ Yes, Approve & Pay',
+    confirmNo:     'Cancel',
+    piError:       'Could not start payment. Please try again.',
+    paySuccess:    'Payment completed successfully! 🎉',
   },
   es: {
     back:       '← Volver a Proyectos',
@@ -34,6 +45,12 @@ const content = {
     hourSuffix: 'hr',
     noRate:     'Sin tarifa',
     pending0:   'Sin aprobaciones pendientes',
+    confirmTitle:  (name) => `¿Aprobar orden para ${name}?`,
+    confirmText:   (profession, sum) => `${profession} · Total: $${sum}`,
+    confirmYes:    '✅ Sí, Aprobar y Pagar',
+    confirmNo:     'Cancelar',
+    piError:       'No se pudo iniciar el pago. Inténtalo de nuevo.',
+    paySuccess:    '¡Pago completado con éxito! 🎉',
   },
 };
 
@@ -53,22 +70,22 @@ function StatusBadge({ status, t }) {
 }
 
 // ── Single order row ──────────────────────────────────────────────────────────
-function OrderRow({ order, t, onUpdate }) {
+function OrderRow({ order, t, onApprove, onReject }) {
   const [loading, setLoading] = useState(false);
 
-  const handle = async (status) => {
+  const handleReject = async () => {
     if (loading) return;
     setLoading(true);
     try {
-      await onUpdate(order._id, status);
+      await onReject(order._id);
     } finally {
       setLoading(false);
     }
   };
 
-  const pro      = order.trade_id;
-  const site     = order.site_id;
-  const canAct   = order.status === 'pending';
+  const pro    = order.trade_id;
+  const site   = order.site_id;
+  const canAct = order.status === 'pending';
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-4 transition hover:shadow-md">
@@ -118,20 +135,22 @@ function OrderRow({ order, t, onUpdate }) {
 
         {canAct ? (
           <>
+            {/* Approve → SweetAlert2 → Stripe modal */}
             <button
-              onClick={() => handle('approved')}
+              onClick={() => onApprove(order)}
               disabled={loading}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white text-xs font-bold shadow shadow-emerald-200 transition-all active:scale-95"
             >
-              {loading ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : '✅'}
-              {t.btn.approve}
+              ✅ {t.btn.approve}
             </button>
             <button
-              onClick={() => handle('rejected')}
+              onClick={handleReject}
               disabled={loading}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-50 text-white text-xs font-bold shadow shadow-red-200 transition-all active:scale-95"
             >
-              {loading ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : '❌'}
+              {loading
+                ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                : '❌'}
               {t.btn.reject}
             </button>
           </>
@@ -150,7 +169,11 @@ export default function PaymentApprovalsPage() {
   const [orders,    setOrders]    = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
-  const [tab,       setTab]       = useState('all'); // 'all' | 'pending' | 'approved' | 'rejected'
+  const [tab,       setTab]       = useState('all');
+
+  // ── Stripe modal state ────────────────────────────────────────────────────
+  const [stripeModal, setStripeModal] = useState(null);
+  // stripeModal = { clientSecret, amount, tradeName, orderId } | null
 
   const load = async () => {
     setLoading(true);
@@ -167,18 +190,93 @@ export default function PaymentApprovalsPage() {
 
   useEffect(() => { load(); }, []);
 
-  const handleUpdate = async (orderId, status) => {
-    // Both approve and reject remove the item from the pending list —
-    // approved orders move to tradehours_orders (trade's 💵 page),
-    // rejected orders create a payment_rejected message (also on trade's page).
-    await updatePaymentApproval(orderId, status);
+  // ── Reject (no SweetAlert2 — quick action) ────────────────────────────────
+  const handleReject = async (orderId) => {
+    await updatePaymentApproval(orderId, 'rejected');
     setOrders((prev) => prev.filter((o) => o._id !== orderId));
   };
 
-  // All items here are pending — no tab filtering needed, but keep 'all'/'pending' for UX
+  // ── Approve → SweetAlert2 confirm → createPaymentIntent → StripeModal ─────
+  const handleApprove = async (order) => {
+    const pro = order.trade_id;
+
+    const { isConfirmed } = await Swal.fire({
+      title:              t.confirmTitle(pro?.fullName ?? ''),
+      html: `
+        <p style="font-size:14px;color:#475569;margin-top:4px;">
+          ${pro?.professionality ?? ''}
+        </p>
+        <p style="font-size:22px;font-weight:800;color:#10b981;margin-top:12px;">
+          $${order.order_sum?.toFixed(2) ?? '0.00'}
+        </p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:4px;">
+          ${order.actual_hours} hrs · ${order.date}
+        </p>
+      `,
+      icon:               'question',
+      showCancelButton:   true,
+      confirmButtonText:  t.confirmYes,
+      cancelButtonText:   t.confirmNo,
+      confirmButtonColor: '#10b981',
+      cancelButtonColor:  '#94a3b8',
+      reverseButtons:     true,
+      customClass: {
+        popup:   'rounded-3xl',
+        title:   'text-base font-extrabold text-slate-800',
+        actions: 'gap-2',
+      },
+    });
+
+    if (!isConfirmed) return;
+
+    // First: approve the order in our DB — this creates the WorkHoursOrder
+    // and returns { deleted, _id (message), order: WorkHoursOrder }
+    let approveResult;
+    try {
+      approveResult = await updatePaymentApproval(order._id, 'approved');
+    } catch (err) {
+      toast.error(t.piError);
+      return;
+    }
+
+    // Remove from list optimistically (it's no longer pending)
+    setOrders((prev) => prev.filter((o) => o._id !== order._id));
+
+    // WorkHoursOrder._id is what createPaymentIntent queries
+    const workHoursOrderId = approveResult?.order?._id;
+    if (!workHoursOrderId) {
+      toast.error(t.piError);
+      return;
+    }
+
+    // Then: create Stripe PaymentIntent server-side
+    let piData;
+    try {
+      piData = await createPaymentIntent(workHoursOrderId);
+    } catch (err) {
+      // Order is approved in DB — payment can be retried from history
+      toast.error(t.piError);
+      return;
+    }
+
+    // Open Stripe modal
+    setStripeModal({
+      clientSecret: piData.clientSecret,
+      amount:       piData.amount,
+      tradeName:    piData.tradeName,
+      orderId:      workHoursOrderId,
+    });
+  };
+
+  // ── Payment success callback ──────────────────────────────────────────────
+  const handlePaySuccess = () => {
+    toast.success(t.paySuccess, { duration: 5000 });
+    setStripeModal(null);
+  };
+
+  // ── Filter tabs ───────────────────────────────────────────────────────────
   const filtered = tab === 'all' ? orders : orders.filter((o) => o.status === tab);
 
-  // Tab counts — only 'all' and 'pending' are meaningful now
   const counts = {
     all:     orders.length,
     pending: orders.length,
@@ -272,11 +370,24 @@ export default function PaymentApprovalsPage() {
             key={order._id}
             order={order}
             t={t}
-            onUpdate={handleUpdate}
+            onApprove={handleApprove}
+            onReject={handleReject}
           />
         ))}
 
       </main>
+
+      {/* Stripe payment modal — rendered outside the list so it doesn't re-mount */}
+      {stripeModal && (
+        <StripePaymentModal
+          clientSecret={stripeModal.clientSecret}
+          amount={stripeModal.amount}
+          tradeName={stripeModal.tradeName}
+          orderId={stripeModal.orderId}
+          onClose={() => setStripeModal(null)}
+          onSuccess={handlePaySuccess}
+        />
+      )}
     </div>
   );
 }

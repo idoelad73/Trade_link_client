@@ -5,6 +5,30 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TradeLink</title>
+
+    <!--
+      Content-Security-Policy — Stripe rules:
+        script-src : allow our bundle + Stripe.js CDN only
+        frame-src  : Stripe iframes (3-D Secure, bank redirects)
+        connect-src: our API + Stripe API (PaymentIntents calls)
+      Card data is collected inside Stripe-hosted iframes — it never
+      touches our DOM, network, or state (rule #1).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self';
+        script-src  'self' https://js.stripe.com;
+        style-src   'self' 'unsafe-inline';
+        img-src     'self' data: https: blob:;
+        font-src    'self' data:;
+        frame-src   https://js.stripe.com;
+        connect-src 'self' https://api.stripe.com http://localhost:3000 https://trade-link-server-dev.onrender.com wss:;
+      "
+    />
+
+    <!-- Stripe.js — loaded from CDN, never self-hosted (rule #1) -->
+    <script src="https://js.stripe.com/v3/" async></script>
   </head>
   <body>
     <div id="app"></div>

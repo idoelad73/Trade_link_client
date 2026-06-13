@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getMe, updateLocation, getPaymentApprovedCount } from '../../api/trade.js';
+import { getMe, updateLocation, getPaymentApprovedCount, getApprovedOrderDates } from '../../api/trade.js';
 import TradeInfoModal from '../../components/trade/TradeInfoModal.jsx';
 import TradeSchedule from '../../components/trade/TradeSchedule.jsx';
 import AvailabilityMessagesModal from '../../components/trade/AvailabilityMessagesModal.jsx';
@@ -44,12 +44,15 @@ export default function TradeDashboard() {
   const [messagesOpen,    setMessagesOpen]    = useState(false);
   const [tradeData,       setTradeData]       = useState(null);
   const [dataLoading,     setDataLoading]     = useState(true);
-  const [approvedDates,   setApprovedDates]   = useState([]);
-  const [paymentCount,    setPaymentCount]    = useState(0);
+  const [approvedDates,       setApprovedDates]       = useState([]);
+  const [paymentCount,        setPaymentCount]        = useState(0);
+  // approvedOrders: [{ date, siteId }] — used to colour calendar light-blue + disable clock
+  const [approvedOrders,      setApprovedOrders]      = useState([]);
 
   useEffect(() => {
     getMe().then(setTradeData).catch(console.error).finally(() => setDataLoading(false));
     getPaymentApprovedCount().then(setPaymentCount).catch(() => {});
+    getApprovedOrderDates().then(setApprovedOrders).catch(() => {});
   }, []);
 
   // Live location updates — every 60 s, only when the trade pro has consented
@@ -177,6 +180,7 @@ export default function TradeDashboard() {
                 initialBusyDays={tradeData?.busyDays || []}
                 initialBookings={tradeData?.bookings || []}
                 approvedDates={approvedDates}
+                approvedOrders={approvedOrders}
                 professionality={tradeData?.professionality ?? ''}
                 hourlyRate={tradeData?.hourlyRate ?? null}
               />
