@@ -47,7 +47,7 @@ export default function TradeDashboard() {
   const [approvedDates,       setApprovedDates]       = useState([]);
   const [paymentCount,        setPaymentCount]        = useState(0);
   // approvedOrders: [{ date, siteId }] — used to colour calendar light-blue + disable clock
-  const [approvedOrders,      setApprovedOrders]      = useState([]);
+  const [approvedOrders, setApprovedOrders] = useState([]);
 
   useEffect(() => {
     getMe().then(setTradeData).catch(console.error).finally(() => setDataLoading(false));
