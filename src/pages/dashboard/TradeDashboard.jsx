@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
 import { getMe, updateLocation, getPaymentApprovedCount, getApprovedOrderDates } from '../../api/trade.js';
+import { completeOnboarding, startOnboarding } from '../../api/tradeStripe.js';
+import { toast } from '../../utils/toast.js';
 import TradeInfoModal from '../../components/trade/TradeInfoModal.jsx';
 import TradeSchedule from '../../components/trade/TradeSchedule.jsx';
 import AvailabilityMessagesModal from '../../components/trade/AvailabilityMessagesModal.jsx';
@@ -48,11 +50,43 @@ export default function TradeDashboard() {
   const [paymentCount,        setPaymentCount]        = useState(0);
   // approvedOrders: [{ date, siteId }] — used to colour calendar light-blue + disable clock
   const [approvedOrders, setApprovedOrders] = useState([]);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     getMe().then(setTradeData).catch(console.error).finally(() => setDataLoading(false));
     getPaymentApprovedCount().then(setPaymentCount).catch(() => {});
     getApprovedOrderDates().then(setApprovedOrders).catch(() => {});
+  }, []);
+
+  // ── Handle Stripe onboarding return ──────────────────────────────────────
+  useEffect(() => {
+    const stripeParam = searchParams.get('stripe');
+    if (!stripeParam) return;
+
+    // Clean the URL immediately
+    setSearchParams({});
+
+    if (stripeParam === 'return') {
+      // Stripe redirected back — check if KYC + bank verification completed
+      completeOnboarding()
+        .then(({ onboarded }) => {
+          if (onboarded) {
+            toast.success('🏦 Bank account verified! You\'re ready to receive payments.', { duration: 6000 });
+          } else {
+            toast.warning('⏳ Stripe is still verifying your account. You\'ll be notified when ready.', { duration: 6000 });
+          }
+        })
+        .catch(() => {});
+    }
+
+    if (stripeParam === 'refresh') {
+      // Onboarding link expired — generate a new one and redirect again
+      startOnboarding()
+        .then(({ url }) => { if (url) window.location.href = url; })
+        .catch(() => {
+          toast.error('Could not restart bank verification. Please try again later.');
+        });
+    }
   }, []);
 
   // Live location updates — every 60 s, only when the trade pro has consented
