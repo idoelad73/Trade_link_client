@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getTradeBusyDays, askAvailability } from '../../api/contractor.js';
+import { getTradeBusyDays, askAvailability, getWorkersLeft } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
 import { toast } from '../../utils/toast.js';
 
@@ -74,7 +74,7 @@ function formatDisplay(dateKey, lang) {
   });
 }
 
-export default function TradeCalendarModal({ tradeId, siteName, siteAddress, siteId, mySiteNames = [], requiredDate = null, onClose }) {
+export default function TradeCalendarModal({ tradeId, siteName, siteAddress, siteId, tradeName = '', workersNo = 0, mySiteNames = [], requiredDate = null, onClose }) {
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
 
@@ -95,7 +95,21 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
   const [sent,          setSent]          = useState(false);
   const [sendError,     setSendError]     = useState('');
   const [confirmOpen,   setConfirmOpen]   = useState(false);
-  const [duplicateInfo, setDuplicateInfo] = useState(null); // { proName, proProfessionality, proPhoto }
+  const [duplicateInfo, setDuplicateInfo] = useState(null);
+
+  // ── Workers modal state ───────────────────────────────────────────────────
+  const [workersOpen,   setWorkersOpen]   = useState(false);
+  const [workersCount,  setWorkersCount]  = useState('1');
+  const [workersError,  setWorkersError]  = useState('');
+  const [slotsLeft,     setSlotsLeft]     = useState(workersNo ?? 0); // remaining slots
+
+  // Re-fetch remaining slots whenever the selected date changes
+  useEffect(() => {
+    if (!siteId || !tradeName || !selectedKey) { setSlotsLeft(workersNo); return; }
+    getWorkersLeft(siteId, tradeName, selectedKey)
+      .then((data) => setSlotsLeft(data.workersLeft))
+      .catch(() => setSlotsLeft(workersNo));
+  }, [selectedKey, siteId, tradeName, workersNo]);
 
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose(); };
@@ -133,6 +147,21 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
 
   const handleAsk = () => {
     if (!selectedKey || sending || sent) return;
+    if (workersNo > 0) {
+      // Open workers count modal first
+      setWorkersCount('1');
+      setWorkersError('');
+      setWorkersOpen(true);
+    } else {
+      setConfirmOpen(true);
+    }
+  };
+
+  const handleWorkersConfirm = () => {
+    const w = parseInt(workersCount);
+    if (isNaN(w) || w < 1) { setWorkersError('Minimum 1 worker required'); return; }
+    if (slotsLeft > 0 && w > slotsLeft) { setWorkersError(`Only ${slotsLeft} slot(s) remaining`); return; }
+    setWorkersOpen(false);
     setConfirmOpen(true);
   };
 
@@ -141,14 +170,20 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
     setSendError('');
     setDuplicateInfo(null);
     setSending(true);
+    const w = workersNo > 0 ? (parseInt(workersCount) || 1) : 1;
     try {
-      await askAvailability(tradeId, selectedKey, siteName, siteAddress, lang, siteId);
+      await askAvailability(tradeId, selectedKey, siteName, siteAddress, lang, siteId, tradeName, w);
       setSent(true);
       toast.success(t.toast(pro?.fullName ?? ''), { duration: 5000 });
       setTimeout(onClose, 800);
     } catch (err) {
-      if (err?.response?.status === 409 && err.response.data?.duplicate) {
-        setDuplicateInfo(err.response.data);
+      const data = err?.response?.data;
+      if (data?.duplicate) {
+        setDuplicateInfo(data);
+      } else if (data?.slotsFull) {
+        setSendError('All worker slots are now filled for this date.');
+      } else if (data?.tooMany) {
+        setSendError(`Only ${data.workersLeft} slot(s) remaining — reduce your worker count.`);
       } else {
         setSendError(t.sendError);
       }
@@ -321,6 +356,94 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
       </div>
     </div>
 
+    {/* ── Workers count mini-modal ───────────────────────────── */}
+    {workersOpen && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-[2px]">
+        <div className="w-full max-w-xs bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100">
+
+          <div className="h-1 w-full bg-gradient-to-r from-emerald-400 to-sky-400" />
+
+          <div className="px-6 pt-6 pb-2 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-2xl mx-auto mb-3">👷</div>
+            <h3 className="text-base font-extrabold text-slate-800 mb-1">How many workers?</h3>
+            <p className="text-xs text-slate-400 mb-1">Tell the contractor how many workers you're sending</p>
+
+            {/* Date reminder */}
+            {selectedKey && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4 mt-2">
+                <p className="text-xs font-semibold text-amber-700">📅 {formatDisplay(selectedKey, lang)}</p>
+              </div>
+            )}
+
+            {/* Slots remaining badge */}
+            {slotsLeft != null && workersNo > 0 && (
+              <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full mb-4 ${
+                slotsLeft <= 0
+                  ? 'bg-red-50 border border-red-200 text-red-600'
+                  : slotsLeft === 1
+                    ? 'bg-amber-50 border border-amber-200 text-amber-700'
+                    : 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+              }`}>
+                {slotsLeft <= 0
+                  ? '🚫 No slots remaining'
+                  : `👷 ${slotsLeft} of ${workersNo} slot${workersNo !== 1 ? 's' : ''} available`}
+              </div>
+            )}
+
+            {/* Number input */}
+            <div className="flex items-center gap-3 mb-2">
+              <button
+                type="button"
+                onClick={() => setWorkersCount(w => String(Math.max(1, parseInt(w) - 1 || 1)))}
+                className="w-11 h-11 flex-shrink-0 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-lg transition active:scale-95"
+              >−</button>
+              <input
+                type="number"
+                min="1"
+                max={slotsLeft > 0 ? slotsLeft : undefined}
+                value={workersCount}
+                onChange={(e) => { setWorkersCount(e.target.value); setWorkersError(''); }}
+                className="flex-1 text-center text-xl font-extrabold text-slate-800 border-2 border-slate-200 focus:border-sky-400 rounded-xl py-2 outline-none transition"
+              />
+              <button
+                type="button"
+                onClick={() => setWorkersCount(w => {
+                  const next = (parseInt(w) || 1) + 1;
+                  if (slotsLeft > 0 && next > slotsLeft) return w;
+                  return String(next);
+                })}
+                className="w-11 h-11 flex-shrink-0 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-lg transition active:scale-95"
+              >+</button>
+            </div>
+
+            {workersError && (
+              <p className="text-xs text-red-500 font-semibold mb-2">{workersError}</p>
+            )}
+          </div>
+
+          <div className="px-6 pb-6 flex gap-2 mt-2">
+            <button
+              onClick={handleWorkersConfirm}
+              disabled={slotsLeft <= 0}
+              className={`flex-1 font-bold py-2.5 rounded-xl text-sm shadow transition-all active:scale-[0.98] ${
+                slotsLeft <= 0
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-emerald-500 to-emerald-400 hover:from-emerald-400 text-white shadow-emerald-200'
+              }`}
+            >
+              Continue →
+            </button>
+            <button
+              onClick={() => setWorkersOpen(false)}
+              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* ── Confirmation mini-modal ─────────────────────────────── */}
     {confirmOpen && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-[2px]">
@@ -332,10 +455,13 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
             <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-2xl mx-auto mb-3">📅</div>
             <h3 className="text-base font-extrabold text-slate-800 mb-1">{t.confirm.title}</h3>
             <p className="text-xs text-slate-400 mb-4">{t.confirm.body()}</p>
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5 space-y-1">
               <p className="text-sm font-bold text-amber-700">
                 {selectedKey && formatDisplay(selectedKey, lang)}
               </p>
+              {workersNo > 0 && (
+                <p className="text-xs text-amber-600 font-semibold">👷 {parseInt(workersCount) || 1} worker{(parseInt(workersCount) || 1) !== 1 ? 's' : ''}</p>
+              )}
             </div>
           </div>
 

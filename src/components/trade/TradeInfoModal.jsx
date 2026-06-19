@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getMe, updateMe } from '../../api/trade.js';
+import { getMe, updateMe, updateLocation } from '../../api/trade.js';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
 import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
@@ -85,13 +85,21 @@ export default function TradeInfoModal({ onClose }) {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [saving,       setSaving]       = useState(false);
   const [error,        setError]        = useState('');
+  const [locStatus,    setLocStatus]    = useState('');   // '' | 'acquiring' | 'ok' | 'denied'
   const photoInputRef = useRef();
 
   useEffect(() => {
     getMe()
       .then((data) => {
         setTrade(data);
-        setForm({ fullName: data.fullName, phone: data.phone, address: data.address, professionality: data.professionality, hourlyRate: data.hourlyRate ?? '' });
+        setForm({
+          fullName: data.fullName,
+          phone: data.phone,
+          address: data.address,
+          professionality: data.professionality,
+          hourlyRate: data.hourlyRate ?? '',
+          locationConsent: data.locationConsent ?? false,
+        });
       })
       .finally(() => setLoading(false));
   }, []);
@@ -109,6 +117,33 @@ export default function TradeInfoModal({ onClose }) {
     return () => document.removeEventListener('keydown', h);
   }, [onClose]);
 
+  const handleLocationToggle = () => {
+    const enabling = !form.locationConsent;
+    if (enabling) {
+      if (!navigator.geolocation) {
+        setLocStatus('denied');
+        return;
+      }
+      setLocStatus('acquiring');
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => {
+          setForm((f) => ({ ...f, locationConsent: true }));
+          setLocStatus('ok');
+          // Fire location update immediately — don't wait for dashboard interval
+          updateLocation(coords.latitude, coords.longitude).catch(() => {});
+        },
+        () => {
+          setLocStatus('denied');
+          setForm((f) => ({ ...f, locationConsent: false }));
+        },
+        { enableHighAccuracy: false, timeout: 10000 }
+      );
+    } else {
+      setForm((f) => ({ ...f, locationConsent: false }));
+      setLocStatus('');
+    }
+  };
+
   const handleSave = async () => {
     setError('');
     setSaving(true);
@@ -116,7 +151,7 @@ export default function TradeInfoModal({ onClose }) {
       let payload;
       if (photoFile) {
         payload = new FormData();
-        Object.entries(form).forEach(([k, v]) => payload.append(k, v));
+        Object.entries(form).forEach(([k, v]) => payload.append(k, String(v)));
         payload.append('photo', photoFile);
       } else {
         payload = form;
@@ -261,6 +296,40 @@ export default function TradeInfoModal({ onClose }) {
                   {TRADE_PROFESSIONALITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
+
+              {/* Location sharing toggle */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">{t.labels.location}</label>
+                <button
+                  type="button"
+                  onClick={handleLocationToggle}
+                  disabled={locStatus === 'acquiring'}
+                  className={`w-full flex items-center gap-3 rounded-xl border-2 px-4 py-3 transition-all ${
+                    form.locationConsent
+                      ? 'border-sky-400 bg-sky-50'
+                      : 'border-slate-200 bg-white hover:border-sky-300'
+                  } disabled:opacity-60`}
+                >
+                  <span className="text-lg">📍</span>
+                  <span className={`flex-1 text-left text-sm font-medium ${form.locationConsent ? 'text-sky-700' : 'text-slate-600'}`}>
+                    {locStatus === 'acquiring'
+                      ? 'Acquiring location…'
+                      : form.locationConsent
+                        ? t.labels.locOn
+                        : t.labels.locOff}
+                  </span>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${form.locationConsent ? 'bg-sky-500' : 'bg-slate-200'}`}>
+                    <div className={`w-4 h-4 bg-white rounded-full shadow absolute top-0.5 transition-transform ${form.locationConsent ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </div>
+                </button>
+                {locStatus === 'denied' && (
+                  <p className="mt-1 text-xs text-amber-600">⚠️ Location access denied. Please allow it in your browser settings.</p>
+                )}
+                {locStatus === 'ok' && (
+                  <p className="mt-1 text-xs text-sky-600">✓ Location acquired and updated.</p>
+                )}
+              </div>
+
               {error && <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">{error}</div>}
             </div>
           )}

@@ -143,18 +143,35 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   const today    = new Date();
   const todayKey = toDateKey(today.getFullYear(), today.getMonth(), today.getDate());
 
-  const [trades,  setTrades]  = useState(() => site.tradesNeeded || []);
+  // Initialise from DB; recompute totalWorkingHrs for any entry where it was
+  // previously stripped (old normalizeTrades bug) but totalHours + workers_no exist.
+  const [trades,  setTrades]  = useState(() =>
+    (site.tradesNeeded || []).map((t) => ({
+      ...t,
+      totalWorkingHrs:
+        t.totalWorkingHrs != null
+          ? t.totalWorkingHrs
+          : (t.budgetType === 'hours' && t.totalHours && t.workers_no)
+              ? t.totalHours * t.workers_no
+              : null,
+    }))
+  );
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
 
   // Selected trade chip (click to select → orange)
   const [selectedTradeName, setSelectedTradeName] = useState(null);
 
+  // ── Validation constants ───────────────────────────────────
+  const MIN_AMOUNT  = 180;  // minimum $ amount
+  const MIN_WORKERS = 1;    // minimum workers
+
   // ── ADD flow: Step 1 — budget ──────────────────────────────
   const [pendingTrade,  setPendingTrade]  = useState(null);
   const [budgetType,    setBudgetType]    = useState('amount');
   const [budgetValue,   setBudgetValue]   = useState('');
   const [workersValue,  setWorkersValue]  = useState('');
+  const [budgetError,   setBudgetError]   = useState('');
 
   // ── ADD flow: Step 2 — date picker ─────────────────────────
   const [pendingDateEntry, setPendingDateEntry] = useState(null);
@@ -168,6 +185,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   const [tiBudgetType,    setTiBudgetType]    = useState('amount');
   const [tiBudgetValue,   setTiBudgetValue]   = useState('');
   const [tiWorkersValue,  setTiWorkersValue]  = useState('');
+  const [tiError,         setTiError]         = useState('');
   const [tiSelectedDate,  setTiSelectedDate]  = useState(null);
   const [tiViewYear,      setTiViewYear]      = useState(today.getFullYear());
   const [tiViewMonth,     setTiViewMonth]     = useState(today.getMonth());
@@ -185,7 +203,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   useEffect(() => {
     const h = (e) => {
       if (e.key !== 'Escape') return;
-      if (tradeInfoOpen)    { setTradeInfoOpen(false); return; }
+      if (tradeInfoOpen)    { setTradeInfoOpen(false); setTiError(''); return; }
       if (pendingDateEntry) { setPendingDateEntry(null); return; }
       if (pendingTrade)     { setPendingTrade(null);     return; }
       onClose();
@@ -203,7 +221,26 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   };
 
   const confirmBudget = (skip = false) => {
-    const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null, workers_no: null };
+    setBudgetError('');
+
+    if (!skip) {
+      // Validate amount
+      if (budgetType === 'amount') {
+        const num = parseFloat(budgetValue);
+        if (!budgetValue || isNaN(num) || num < MIN_AMOUNT) {
+          setBudgetError(`Minimum amount is $${MIN_AMOUNT}`);
+          return;
+        }
+      }
+      // Validate workers
+      const w = parseInt(workersValue);
+      if (!workersValue || isNaN(w) || w < MIN_WORKERS) {
+        setBudgetError(`Minimum ${MIN_WORKERS} worker required`);
+        return;
+      }
+    }
+
+    const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null, totalWorkingHrs: null, workers_no: null };
     if (!skip && budgetValue) {
       const num = parseFloat(budgetValue);
       if (!isNaN(num) && num > 0) {
@@ -213,7 +250,13 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
       }
     }
     const w = parseInt(workersValue);
-    if (!isNaN(w) && w > 0) entry.workers_no = w;
+    if (!isNaN(w) && w > 0) {
+      entry.workers_no = w;
+      // Auto-compute total working hours when budget type is hours
+      if (entry.budgetType === 'hours' && entry.totalHours) {
+        entry.totalWorkingHrs = entry.totalHours * w;
+      }
+    }
     setPendingTrade(null);
     setPendingDateEntry(entry);
     setSelectedDate(null);
@@ -253,21 +296,42 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   };
 
   const buildTiUpdated = (extraFields = {}) => {
-    const num = parseFloat(tiBudgetValue);
+    const num       = parseFloat(tiBudgetValue);
     const hasBudget = !isNaN(num) && num > 0;
-    const w = parseInt(tiWorkersValue);
+    const w         = parseInt(tiWorkersValue);
+    const hasWorkers = !isNaN(w) && w > 0;
+    const hrs       = hasBudget && tiBudgetType === 'hours' ? num : null;
+    // totalWorkingHrs is only meaningful when budgetType is 'hours'
+    const totalWorkingHrs = hrs && hasWorkers ? hrs * w : null;
     return {
       ...tiTrade,
-      budgetType:    hasBudget ? tiBudgetType : null,
-      maxAmount:     hasBudget && tiBudgetType === 'amount' ? num : null,
-      totalHours:    hasBudget && tiBudgetType === 'hours'  ? num : null,
-      requiredDate:  tiSelectedDate,
-      workers_no: (!isNaN(w) && w > 0) ? w : null,
+      budgetType:      hasBudget ? tiBudgetType : null,
+      maxAmount:       hasBudget && tiBudgetType === 'amount' ? num : null,
+      totalHours:      hrs,
+      totalWorkingHrs,
+      requiredDate:    tiSelectedDate,
+      workers_no:      hasWorkers ? w : null,
       ...extraFields,
     };
   };
 
+  // Returns an error string if invalid, empty string if valid
+  const validateTiFields = () => {
+    if (tiBudgetType === 'amount') {
+      const num = parseFloat(tiBudgetValue);
+      if (!tiBudgetValue || isNaN(num) || num < MIN_AMOUNT)
+        return `Minimum amount is $${MIN_AMOUNT}`;
+    }
+    const w = parseInt(tiWorkersValue);
+    if (!tiWorkersValue || isNaN(w) || w < MIN_WORKERS)
+      return `Minimum ${MIN_WORKERS} worker required`;
+    return '';
+  };
+
   const confirmTradeInfo = () => {
+    const err = validateTiFields();
+    if (err) { setTiError(err); return; }
+    setTiError('');
     setTrades((prev) => prev.map((tr) => tr.name === tiTrade.name ? buildTiUpdated() : tr));
     setTradeInfoOpen(false);
     setTiTrade(null);
@@ -275,6 +339,9 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   };
 
   const approveTradeInfo = () => {
+    const err = validateTiFields();
+    if (err) { setTiError(err); return; }
+    setTiError('');
     setTrades((prev) => prev.map((tr) => tr.name === tiTrade.name ? buildTiUpdated({ assigned: true }) : tr));
     setTradeInfoOpen(false);
     setTiTrade(null);
@@ -505,16 +572,21 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
               </div>
             </div>
 
+            {budgetError && (
+              <p className="mx-6 mb-2 text-xs font-semibold text-red-500 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-center">
+                ⚠️ {budgetError}
+              </p>
+            )}
             <div className="px-6 pb-5 flex gap-2">
               <button type="button" onClick={() => confirmBudget(false)}
                 className="flex-1 bg-gradient-to-r from-sky-500 to-sky-400 hover:from-sky-400 text-white font-semibold py-2.5 rounded-xl text-sm shadow shadow-sky-200 transition-all active:scale-[0.98]">
                 {tb.next}
               </button>
-              <button type="button" onClick={() => confirmBudget(true)}
+              <button type="button" onClick={() => { setBudgetError(''); confirmBudget(true); }}
                 className="px-3 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-xs transition">
                 {tb.skip}
               </button>
-              <button type="button" onClick={() => setPendingTrade(null)}
+              <button type="button" onClick={() => { setBudgetError(''); setPendingTrade(null); }}
                 className="px-3 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-xs transition">
                 {tb.cancel}
               </button>
@@ -619,7 +691,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
                 </div>
                 <h3 className="text-base font-extrabold text-slate-800">{tiTrade.name}</h3>
               </div>
-              <button onClick={() => setTradeInfoOpen(false)}
+              <button onClick={() => { setTradeInfoOpen(false); setTiError(''); }}
                 className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 transition text-lg">×</button>
             </div>
 
@@ -719,6 +791,11 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
 
             {/* Footer buttons */}
             <div className="px-6 py-4 border-t border-slate-100 flex flex-col gap-2 flex-shrink-0">
+              {tiError && (
+                <p className="text-xs font-semibold text-red-500 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-center">
+                  ⚠️ {tiError}
+                </p>
+              )}
               {/* Approve button — only show if not already assigned */}
               {!tiTrade.assigned && (
                 <button type="button" onClick={approveTradeInfo}
@@ -736,7 +813,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
                   className="flex-1 bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 text-white font-bold py-2.5 rounded-2xl text-sm shadow shadow-orange-200 transition-all active:scale-[0.99]">
                   {ti.update}
                 </button>
-                <button type="button" onClick={() => setTradeInfoOpen(false)}
+                <button type="button" onClick={() => { setTradeInfoOpen(false); setTiError(''); }}
                   className="px-5 py-2.5 rounded-2xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition">
                   {ti.cancel}
                 </button>

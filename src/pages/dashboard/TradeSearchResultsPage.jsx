@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import useUIStore from '../../stores/uiStore.js';
 import TradeCalendarModal from '../../components/contractor/TradeCalendarModal.jsx';
+import { getWorkersLeft } from '../../api/contractor.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatDistance(meters, unit) {
@@ -40,18 +41,20 @@ const content = {
 };
 
 // ── Pro card ──────────────────────────────────────────────────────────────────
-function ProCard({ pro, unit, t, siteName, tradeEntry = {}, onOpenCalendar }) {
+function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, onOpenCalendar }) {
   const busy        = isBusyToday(pro.busyDays);
   const siteBooking = pro.bookings?.find((b) => b.siteName === siteName);
 
   const formatBookingDate = (dateKey) =>
     new Date(dateKey + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-  const borderClass = siteBooking
-    ? 'border-sky-200 bg-sky-50/30'
-    : busy
-      ? 'border-red-100'
-      : 'border-emerald-100';
+  const borderClass = isFull
+    ? 'border-slate-200 bg-slate-50/50 opacity-60'
+    : siteBooking
+      ? 'border-sky-200 bg-sky-50/30'
+      : busy
+        ? 'border-red-100'
+        : 'border-emerald-100';
 
   return (
     <div className={`bg-white rounded-2xl border shadow-sm px-4 py-4 transition-all ${borderClass}`}>
@@ -101,13 +104,24 @@ function ProCard({ pro, unit, t, siteName, tradeEntry = {}, onOpenCalendar }) {
             {tradeEntry.totalHours}h × ${pro.hourlyRate} = <span className="font-extrabold">${tradeEntry.totalHours * pro.hourlyRate}</span>
           </span>
         )}
-        <div className="ml-auto flex-shrink-0">
-          <button
-            onClick={() => onOpenCalendar(pro._id)}
-            className="flex items-center gap-1.5 text-sm font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-4 py-2 rounded-xl transition active:scale-95"
-          >
-            📅 {t.openCal}
-          </button>
+        <div className="ml-auto flex-shrink-0 flex items-center gap-2">
+          {slotsLeft != null && !isFull && (
+            <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full whitespace-nowrap">
+              👷 {slotsLeft} slot{slotsLeft !== 1 ? 's' : ''} left
+            </span>
+          )}
+          {isFull ? (
+            <span className="text-xs font-bold text-slate-400 bg-slate-100 border border-slate-200 px-4 py-2 rounded-xl">
+              🚫 Slots Full
+            </span>
+          ) : (
+            <button
+              onClick={() => onOpenCalendar(pro._id)}
+              className="flex items-center gap-1.5 text-sm font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-4 py-2 rounded-xl transition active:scale-95"
+            >
+              📅 {t.openCal}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -132,6 +146,15 @@ export default function TradeSearchResultsPage() {
   const mySiteNames  = state?.mySiteNames  ?? [];
 
   const [calendarPro, setCalendarPro] = useState(null);
+  const [slotsInfo,   setSlotsInfo]   = useState(null); // { workersLeft, isFull }
+
+  // Fetch remaining worker slots for this trade+date (one call for the whole results page)
+  useEffect(() => {
+    if (!siteId || !trade || !requiredDate) return;
+    getWorkersLeft(siteId, trade, requiredDate)
+      .then(setSlotsInfo)
+      .catch(() => {}); // silently ignore — slots badge is informational
+  }, [siteId, trade, requiredDate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-yellow-50 to-amber-50 font-sans text-slate-800">
@@ -178,8 +201,10 @@ export default function TradeSearchResultsPage() {
                 t={t}
                 siteName={siteName}
                 tradeEntry={tradeEntry}
+                slotsLeft={slotsInfo?.workersLeft ?? null}
+                isFull={slotsInfo?.isFull ?? false}
                 onOpenCalendar={(proId) =>
-                  setCalendarPro({ proId, siteName, siteAddress, siteId, requiredDate })
+                  setCalendarPro({ proId, siteName, siteAddress, siteId, requiredDate, tradeName: trade, workersNo: tradeEntry.workers_no ?? 0 })
                 }
               />
             ))}
@@ -195,8 +220,10 @@ export default function TradeSearchResultsPage() {
           siteAddress={calendarPro.siteAddress}
           siteId={calendarPro.siteId}
           requiredDate={calendarPro.requiredDate ?? null}
+          tradeName={calendarPro.tradeName ?? ''}
+          workersNo={calendarPro.workersNo ?? 0}
           mySiteNames={mySiteNames}
-          onClose={() => setCalendarPro(null)}
+          onClose={() => { setCalendarPro(null); getWorkersLeft(siteId, trade, requiredDate).then(setSlotsInfo).catch(() => {}); }}
         />
       )}
     </div>

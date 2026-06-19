@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getApplications, approveApplication, approveReschedule, declineReschedule } from '../../api/contractor.js';
+import { getApplications, approveApplication, approveAvailabilityRequest, approveReschedule, declineReschedule } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
 import { toast } from '../../utils/toast.js';
 
@@ -46,15 +46,18 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
 
   const [applications,  setApplications]  = useState([]);
   const [reschedules,   setReschedules]   = useState([]);
+  const [sentRequests,  setSentRequests]  = useState([]);
   const [loading,       setLoading]       = useState(true);
-  const [approving,     setApproving]     = useState(null);
+  const [approving,       setApproving]       = useState(null);
+  const [approvingSent,   setApprovingSent]   = useState(null);
   const [actingReschedule, setActingReschedule] = useState(null); // id being approved/declined
 
   useEffect(() => {
     getApplications()
-      .then(({ applications: apps = [], reschedules: resc = [] }) => {
+      .then(({ applications: apps = [], reschedules: resc = [], sentRequests: sent = [] }) => {
         setApplications(apps);
         setReschedules(resc);
+        setSentRequests(sent);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -94,6 +97,25 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
     }
   };
 
+  const handleApproveSent = async (msg) => {
+    if (approvingSent) return;
+    setApprovingSent(msg._id);
+    try {
+      await approveAvailabilityRequest(msg._id);
+      setSentRequests((prev) => prev.filter((m) => m._id !== msg._id));
+      toast.success(`✅ ${msg.tradePro?.fullName} booked for ${msg.requestedDate}`);
+      onApproved?.();
+    } catch (err) {
+      if (err?.response?.status === 409 && err.response.data?.alreadyAssigned) {
+        toast.error(t.alreadyAssigned, { duration: 4000 });
+      } else {
+        toast.error('Failed to approve. Please try again.');
+      }
+    } finally {
+      setApprovingSent(null);
+    }
+  };
+
   const tradeEntry = (app) => app.site?.tradesNeeded?.find(
     (t) => t.name?.toLowerCase() === app.tradePro?.professionality?.toLowerCase()
   );
@@ -127,7 +149,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
             <div className="flex items-center justify-center py-16">
               <div className="w-8 h-8 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
             </div>
-          ) : applications.length === 0 ? (
+          ) : applications.length === 0 && reschedules.length === 0 && sentRequests.length === 0 ? (
             <div className="text-center py-16 text-slate-400">{t.empty}</div>
           ) : (
             <div className="space-y-4">
@@ -221,6 +243,61 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* ── Sent availability requests — awaiting trade pro response ── */}
+          {sentRequests.length > 0 && (
+            <div className={`${applications.length > 0 ? 'mt-5' : ''} space-y-3`}>
+              <p className="text-xs font-bold text-sky-500 uppercase tracking-wide px-1">
+                📤 Sent — Awaiting Response
+              </p>
+              {sentRequests.map((msg) => (
+                <div key={msg._id} className="bg-white rounded-2xl border border-sky-200 shadow-sm overflow-hidden">
+                  <div className="h-1 w-full bg-gradient-to-r from-sky-400 to-emerald-400" />
+                  <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-slate-50">
+                    {msg.tradePro?.photo
+                      ? <img src={msg.tradePro.photo} alt={msg.tradePro.fullName} className="w-11 h-11 rounded-xl object-cover flex-shrink-0 border border-slate-100" />
+                      : <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-50 to-emerald-50 flex items-center justify-center text-xl flex-shrink-0">🔧</div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="font-extrabold text-slate-800 text-sm truncate">{msg.tradePro?.fullName}</p>
+                      <p className="text-xs text-slate-400 truncate">🔧 {msg.tradePro?.professionality}</p>
+                    </div>
+                    <span className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-100 text-sky-600 border border-sky-200 whitespace-nowrap">
+                      ⏳ Pending
+                    </span>
+                  </div>
+                  <div className="px-4 py-3 grid grid-cols-2 gap-2">
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Project</p>
+                      <p className="text-xs font-bold text-slate-700 truncate">🏗️ {msg.site?.name}</p>
+                    </div>
+                    <div className="bg-sky-50 border border-sky-100 rounded-xl px-3 py-2">
+                      <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-wide mb-0.5">Requested Date</p>
+                      <p className="text-xs font-bold text-sky-700">📅 {msg.requestedDate}</p>
+                    </div>
+                  </div>
+                  {msg.tradeName && (
+                    <p className="px-4 text-xs text-emerald-600 font-semibold">
+                      👷 {msg.workersOffered ?? 1} worker{(msg.workersOffered ?? 1) !== 1 ? 's' : ''} · {msg.tradeName}
+                    </p>
+                  )}
+                  <p className="px-4 pt-1 pb-3 text-[10px] text-slate-300">
+                    Sent {new Date(msg.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </p>
+                  {/* Approve button — book trade pro directly without waiting for their response */}
+                  <div className="px-4 pb-4">
+                    <button
+                      onClick={() => handleApproveSent(msg)}
+                      disabled={!!approvingSent}
+                      className="w-full py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-60 disabled:cursor-not-allowed transition shadow-sm active:scale-[0.98]"
+                    >
+                      {approvingSent === msg._id ? '…' : '✓ Approve & Book'}
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

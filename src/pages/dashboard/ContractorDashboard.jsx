@@ -258,51 +258,70 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
             </p>
             <div className="flex flex-wrap gap-2">
               {site.tradesNeeded.map((tr) => {
-                const isSelected = selectedTrade === tr.name;
-                const isAssigned = tr.assigned;
-                const dateLabel  = fmtDate(tr.requiredDate);
+                const isSelected   = selectedTrade === tr.name;
+                const isAssigned   = tr.assigned;
+                // isFull = no remaining worker slots → orange + locked
+                const hasWorkers   = tr.workers_no !== null && tr.workers_no !== undefined;
+                const isFull       = hasWorkers ? tr.workers_no <= 0 : isAssigned;
+                const dateLabel    = fmtDate(tr.requiredDate);
                 return (
                   <button
                     key={tr.name}
                     type="button"
-                    disabled={isAssigned}
-                    onClick={() => !isAssigned && onSelectTrade(site._id, isSelected ? null : tr.name)}
+                    disabled={isFull}
+                    onClick={() => !isFull && onSelectTrade(site._id, isSelected ? null : tr.name)}
                     className={`flex flex-col items-start gap-1 px-2.5 py-2 rounded-xl border-2 text-xs font-semibold transition-all duration-150 active:scale-95 ${
-                      isAssigned
+                      isFull
                         ? 'bg-orange-400 border-orange-400 text-white shadow shadow-orange-100 cursor-not-allowed'
                         : isSelected
                           ? 'bg-orange-500 border-orange-500 text-white shadow shadow-orange-200'
-                          : 'bg-white border-amber-200 text-amber-700 hover:border-orange-300 hover:bg-orange-50'
+                          : isAssigned
+                            ? 'bg-amber-50 border-amber-300 text-amber-800 hover:border-amber-400 hover:bg-amber-100'
+                            : 'bg-white border-amber-200 text-amber-700 hover:border-orange-300 hover:bg-orange-50'
                     }`}
                   >
                     {/* Row 1: name */}
                     <span className="flex items-center gap-1 leading-none">
-                      {isAssigned && <span className="text-[10px]">✓</span>}
+                      {isFull     && <span className="text-[10px]">✓</span>}
+                      {isAssigned && !isFull && <span className="text-[10px]">⚡</span>}
                       {tr.name}
                     </span>
                     {/* Row 2: budget + date + workers badges */}
                     <span className="flex items-center gap-1 flex-wrap">
                         {tr.budgetType === 'amount' && tr.maxAmount && (
-                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'bg-white/25 text-white' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
+                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isFull || isSelected ? 'bg-white/25 text-white' : 'bg-emerald-50 text-emerald-600 border border-emerald-200'}`}>
                             💰 ${tr.maxAmount}
                           </span>
                         )}
                         {tr.budgetType === 'hours' && tr.totalHours && (
-                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'bg-white/25 text-white' : 'bg-violet-50 text-violet-600 border border-violet-200'}`}>
+                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isFull || isSelected ? 'bg-white/25 text-white' : 'bg-violet-50 text-violet-600 border border-violet-200'}`}>
                             ⏱ {tr.totalHours}h
                           </span>
                         )}
+                        {tr.budgetType === 'hours' && tr.totalWorkingHrs != null && tr.workers_no > 0 && (
+                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isFull || isSelected ? 'bg-white/25 text-white' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'}`}>
+                            🕐 {tr.totalWorkingHrs}h total
+                          </span>
+                        )}
                         {dateLabel ? (
-                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'bg-white/25 text-white' : 'bg-sky-50 text-sky-600 border border-sky-200'}`}>
+                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isFull || isSelected ? 'bg-white/25 text-white' : 'bg-sky-50 text-sky-600 border border-sky-200'}`}>
                             📅 {dateLabel}
                           </span>
                         ) : (
-                          <span className={`px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'text-white/50' : 'text-slate-300 border border-dashed border-slate-200'}`}>
+                          <span className={`px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isFull || isSelected ? 'text-white/50' : 'text-slate-300 border border-dashed border-slate-200'}`}>
                             📅 –
                           </span>
                         )}
-                        {tr.workers_no && (
-                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${isAssigned || isSelected ? 'bg-white/25 text-white' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}>
+                        {hasWorkers && (
+                          <span className={`font-bold px-1.5 py-0.5 rounded-md text-[10px] leading-none ${
+                            isFull || isSelected
+                              ? 'bg-white/25 text-white'
+                              : tr.workers_no === 0
+                                ? 'bg-orange-50 text-orange-600 border border-orange-200'
+                                : tr.workers_no <= 1
+                                  ? 'bg-amber-50 text-amber-600 border border-amber-300'
+                                  : 'bg-blue-50 text-blue-600 border border-blue-200'
+                          }`}>
                             👷 {tr.workers_no}
                           </span>
                         )}
@@ -478,9 +497,11 @@ export default function ContractorDashboard() {
 
   const refreshApplicationCount = () =>
     getApplications()
-      .then(({ applications = [], reschedules = [] }) =>
+      .then(({ applications = [], reschedules = [], sentRequests = [] }) =>
         setApplicationsCount(
-          applications.filter(a => a.status === 'pending').length + reschedules.length
+          applications.filter(a => a.status === 'pending').length +
+          reschedules.length +
+          sentRequests.length
         )
       ).catch(() => {});
 

@@ -56,6 +56,16 @@ export default function TradeDashboard() {
     getMe().then(setTradeData).catch(console.error).finally(() => setDataLoading(false));
     getPaymentApprovedCount().then(setPaymentCount).catch(() => {});
     getApprovedOrderDates().then(setApprovedOrders).catch(() => {});
+
+    // Re-fetch bookings when the trade pro returns to this tab
+    // (contractor may have approved while the tab was in the background)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        getMe().then(setTradeData).catch(console.error);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   // ── Handle Stripe onboarding return ──────────────────────────────────────
@@ -226,7 +236,12 @@ export default function TradeDashboard() {
       {modalOpen      && <TradeInfoModal onClose={() => setModalOpen(false)} />}
       {messagesOpen   && (
         <AvailabilityMessagesModal
-          onClose={() => setMessagesOpen(false)}
+          onClose={() => {
+            setMessagesOpen(false);
+            // Always re-fetch after closing messages — booking may have been
+            // created by the contractor directly (approveAvailabilityRequest)
+            getMe().then(setTradeData).catch(console.error);
+          }}
           onApproved={(date) => {
             getMe().then(setTradeData).catch(console.error);
             if (date) setApprovedDates((prev) => [...prev, date]);

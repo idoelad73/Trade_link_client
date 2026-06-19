@@ -219,6 +219,7 @@ export default function TradeRegister() {
   const [showConfirm, setShowConfirm]   = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [error, setError]         = useState('');
+  const [locationError, setLocationError] = useState('');
   const [emailTaken, setEmailTaken] = useState(false);
   const [loading, setLoading]     = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -258,8 +259,10 @@ export default function TradeRegister() {
 
   const handleLocationAllow = () => {
     setShowLocationModal(false);
+    setLocationError('');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        setLocationError('');
         setForm((f) => ({
           ...f,
           locationConsent: true,
@@ -268,8 +271,11 @@ export default function TradeRegister() {
         }));
       },
       () => {
-        setForm((f) => ({ ...f, locationConsent: true }));
-      }
+        // Geolocation denied or unavailable — keep consent false so [0,0] is not stored
+        setForm((f) => ({ ...f, locationConsent: false, latitude: null, longitude: null }));
+        setLocationError('Location access was denied. You can enable it later from your profile.');
+      },
+      { enableHighAccuracy: false, timeout: 10000 }
     );
   };
 
@@ -762,6 +768,14 @@ export default function TradeRegister() {
               }`} />
             </div>
           </button>
+
+          {/* Location error */}
+          {locationError && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-700 flex items-start gap-2">
+              <span className="text-base leading-none mt-0.5">⚠️</span>
+              <p>{locationError}</p>
+            </div>
+          )}
 
           {/* Error */}
           {emailTaken && (

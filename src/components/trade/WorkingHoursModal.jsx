@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import Swal from 'sweetalert2';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
 import { submitWorkLog } from '../../api/trade.js';
@@ -9,7 +10,7 @@ const content = {
   en: {
     badge:  '⏱️ Work Log',
     title:  'Actual Working Hours',
-    labels: { name: 'Professional', trade: 'Trade', date: 'Date', site: 'Site', address: 'Address' },
+    labels: { name: 'Professional', trade: 'Trade', date: 'Date', site: 'Site' },
     status: { idle: 'Not started', running: 'Running…', paused: 'Paused' },
     btn: {
       start:    '▶ Start',
@@ -19,19 +20,29 @@ const content = {
       cancel:   'Cancel',
       closeRun: 'Close (timer keeps running)',
     },
-    noRate:   'No hourly rate set — order sum will be $0.',
-    noTime:   'Start the timer first.',
-    success:  '✅ Work log sent for approval!',
-    error:    'Failed to send. Please try again.',
-    hours:    (h) => `${h} hr${h !== 1 ? 's' : ''} recorded`,
+    noRate:  'No hourly rate set — order sum will be $0.',
+    noTime:  'Start the timer first.',
+    success: '✅ Work log sent for approval!',
+    error:   'Failed to send. Please try again.',
+    hours:   (h) => `${h} hr${h !== 1 ? 's' : ''} recorded`,
     bgRunning: '⏱️ Timer running in background',
     toastOk:  (name) => `💵 Payment approval request sent to ${name || 'contractor'}`,
     toastErr: '❌ Failed to send work log. Please try again.',
+    minHours: {
+      title:       'Minimum Hours Required',
+      html:        (min) => `The minimum hours for this job is <strong>${min}h</strong>.<br>Please enter the correct hours below.`,
+      inputLabel:  'Corrected hours',
+      inputPlaceholder: (min) => `Minimum: ${min}h`,
+      confirm:     'Confirm',
+      cancel:      'Cancel',
+      tooLow:      (min) => `Minimum is ${min} hours`,
+      invalid:     'Please enter a valid number',
+    },
   },
   es: {
     badge:  '⏱️ Registro de Trabajo',
     title:  'Horas Reales Trabajadas',
-    labels: { name: 'Profesional', trade: 'Oficio', date: 'Fecha', site: 'Obra', address: 'Dirección' },
+    labels: { name: 'Profesional', trade: 'Oficio', date: 'Fecha', site: 'Obra' },
     status: { idle: 'No iniciado', running: 'En curso…', paused: 'Pausado' },
     btn: {
       start:    '▶ Iniciar',
@@ -41,14 +52,24 @@ const content = {
       cancel:   'Cancelar',
       closeRun: 'Cerrar (temporizador activo)',
     },
-    noRate:   'Sin tarifa horaria — el total será $0.',
-    noTime:   'Primero inicia el temporizador.',
-    success:  '✅ ¡Registro enviado para aprobación!',
-    error:    'Error al enviar. Inténtalo de nuevo.',
-    hours:    (h) => `${h} hr${h !== 1 ? 's' : ''} registradas`,
+    noRate:  'Sin tarifa horaria — el total será $0.',
+    noTime:  'Primero inicia el temporizador.',
+    success: '✅ ¡Registro enviado para aprobación!',
+    error:   'Error al enviar. Inténtalo de nuevo.',
+    hours:   (h) => `${h} hr${h !== 1 ? 's' : ''} registradas`,
     bgRunning: '⏱️ Temporizador activo en segundo plano',
     toastOk:  (name) => `💵 Solicitud enviada a ${name || 'el contratista'}`,
     toastErr: '❌ Error al enviar el registro. Inténtalo de nuevo.',
+    minHours: {
+      title:       'Horas Mínimas Requeridas',
+      html:        (min) => `Las horas mínimas para este trabajo son <strong>${min}h</strong>.<br>Por favor ingresa las horas correctas.`,
+      inputLabel:  'Horas corregidas',
+      inputPlaceholder: (min) => `Mínimo: ${min}h`,
+      confirm:     'Confirmar',
+      cancel:      'Cancelar',
+      tooLow:      (min) => `El mínimo es ${min} horas`,
+      invalid:     'Por favor ingresa un número válido',
+    },
   },
 };
 
@@ -78,36 +99,35 @@ export default function WorkingHoursModal({
   siteId,
   professionality,
   hourlyRate,
-  // Background timer shared with TradeSchedule so state survives close/reopen
-  bgTimerRef,         // { acc, start, bookingKey }
-  timerRunning,       // boolean (for icon pulse in parent)
-  setTimerRunning,    // (bool) => void
+  totalHours,   // minimum hours required for this job (from site tradesNeeded)
+  workersNo,    // how many workers this trade pro is bringing
+  bgTimerRef,
+  timerRunning,
+  setTimerRunning,
   onClose,
-  onSent,             // called after successful submission — parent can disable clock
+  onSent,
 }) {
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
   const user = useAuthStore((s) => s.user);
 
+  const workers = (workersNo && workersNo > 0) ? workersNo : 1;
+
   // ── Local display interval (recreated on every open) ─────────────────────
   const intervalRef = useRef(null);
 
-  // On open: resume from bgTimerRef if this booking is active, else start fresh
   const isSameBooking = bgTimerRef.current.bookingKey === date;
   const [isRunning,      setIsRunning]      = useState(() => isSameBooking && bgTimerRef.current.start !== null);
   const [displaySeconds, setDisplaySeconds] = useState(() => isSameBooking ? currentBgSeconds(bgTimerRef.current) : 0);
 
-  // If bgTimerRef belongs to a different booking, reset it silently on open
   useEffect(() => {
     if (!isSameBooking && bgTimerRef.current.bookingKey !== null) {
-      // Stop any running timer for the other booking before opening this one
       bgTimerRef.current = { acc: 0, start: null, bookingKey: null };
       setTimerRunning(false);
     }
     bgTimerRef.current.bookingKey = date;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Start display interval if we opened while timer was already running
   useEffect(() => {
     if (isRunning && bgTimerRef.current.start !== null) {
       intervalRef.current = setInterval(() => {
@@ -117,7 +137,6 @@ export default function WorkingHoursModal({
     return () => clearInterval(intervalRef.current);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Escape: close modal — if running, leave timer in background
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') handleClose(); };
     document.addEventListener('keydown', h);
@@ -136,22 +155,55 @@ export default function WorkingHoursModal({
     }, 500);
   };
 
-  const handleStop = () => {
+  const handleStop = async () => {
     if (!isRunning) return;
     clearInterval(intervalRef.current);
-    // Commit elapsed seconds to accumulated total
+
+    // Commit elapsed seconds
     const elapsed = Math.floor((Date.now() - bgTimerRef.current.start) / 1000);
     bgTimerRef.current.acc  += elapsed;
     bgTimerRef.current.start = null;
-    setDisplaySeconds(bgTimerRef.current.acc);
+    const finalSec   = bgTimerRef.current.acc;
+    const finalHours = toHours(finalSec);
+
     setIsRunning(false);
     setTimerRunning(false);
+    setDisplaySeconds(finalSec);
+
+    // ── Minimum-hours guard (SweetAlert2) ─────────────────────────────────
+    if (totalHours && finalHours < totalHours) {
+      const mh = t.minHours;
+      const { value, isConfirmed } = await Swal.fire({
+        icon:              'warning',
+        title:             mh.title,
+        html:              mh.html(totalHours),
+        input:             'number',
+        inputLabel:        mh.inputLabel,
+        inputPlaceholder:  mh.inputPlaceholder(totalHours),
+        inputAttributes:   { min: totalHours, step: '0.01', style: 'font-size:1.1rem;text-align:center' },
+        confirmButtonText: mh.confirm,
+        cancelButtonText:  mh.cancel,
+        showCancelButton:  true,
+        confirmButtonColor: '#f59e0b',
+        cancelButtonColor:  '#94a3b8',
+        inputValidator: (val) => {
+          if (!val || isNaN(Number(val))) return mh.invalid;
+          if (Number(val) < totalHours)   return mh.tooLow(totalHours);
+        },
+      });
+
+      if (isConfirmed && value) {
+        // Override the accumulated seconds with the corrected hours
+        const correctedSec = Math.round(parseFloat(value) * 3600);
+        bgTimerRef.current.acc = correctedSec;
+        setDisplaySeconds(correctedSec);
+      }
+      // If cancelled, keep the recorded time (trade pro can fix and re-stop manually)
+    }
   };
 
-  // Close: if timer is running, leave it in the background (bgTimerRef.start stays set)
   const handleClose = () => {
-    clearInterval(intervalRef.current); // stop the display interval
-    // timerRunning stays true — clock icon in parent keeps pulsing
+    clearInterval(intervalRef.current);
     onClose();
   };
 
@@ -161,19 +213,21 @@ export default function WorkingHoursModal({
 
   const handleSend = async () => {
     if (displaySeconds === 0) { setResult(t.noTime); return; }
-    // Auto-stop if still running
     if (isRunning) handleStop();
     const finalSec = bgTimerRef.current.acc;
     setSending(true);
     setResult('');
     try {
-      const res = await submitWorkLog({ siteId, date, totalSeconds: finalSec });
+      const res = await submitWorkLog({
+        siteId,
+        date,
+        totalSeconds: finalSec,
+        workers_no:   workers,   // server multiplies into order_sum
+      });
       setResult(t.success);
-      // Reset background timer after successful send
       bgTimerRef.current = { acc: 0, start: null, bookingKey: null };
       setTimerRunning(false);
-      onSent?.();        // tell parent to disable the clock icon
-      // Show a sweet toast with the contractor's company name
+      onSent?.();
       toast.success(t.toastOk(res?.contractorName), { duration: 5000 });
       setTimeout(onClose, 2200);
     } catch {
@@ -185,20 +239,27 @@ export default function WorkingHoursModal({
   };
 
   // ── Derived ──────────────────────────────────────────────────────────────
-  const hasTime     = displaySeconds > 0;
-  const sent        = result === t.success;
-  const statusText  = isRunning ? t.status.running : (hasTime ? t.status.paused : t.status.idle);
-  const hoursFloat  = toHours(displaySeconds);
-  const orderSum    = hourlyRate ? (hoursFloat * hourlyRate).toFixed(2) : null;
+  const hasTime      = displaySeconds > 0;
+  const sent         = result === t.success;
+  const statusText   = isRunning ? t.status.running : (hasTime ? t.status.paused : t.status.idle);
+  const hoursFloat   = toHours(displaySeconds);
 
-  const ringColor = isRunning ? 'ring-violet-400 shadow-violet-100'
-                  : hasTime   ? 'ring-amber-400  shadow-amber-100'
-                              : 'ring-slate-200  shadow-transparent';
-  const bgColor   = isRunning ? 'bg-violet-50' : hasTime ? 'bg-amber-50' : 'bg-slate-50';
-  const numColor  = isRunning ? 'text-violet-700' : hasTime ? 'text-amber-700' : 'text-slate-400';
+  // Effective rate = workers × hourlyRate; total = hours × effectiveRate
+  const effectiveRate = hourlyRate ? hourlyRate * workers : null;
+  const orderSum      = effectiveRate ? (hoursFloat * effectiveRate).toFixed(2) : null;
+
+  // Visual state
+  const ringColor  = isRunning ? 'ring-violet-400 shadow-violet-100'
+                   : hasTime   ? 'ring-amber-400  shadow-amber-100'
+                               : 'ring-slate-200  shadow-transparent';
+  const bgColor    = isRunning ? 'bg-violet-50' : hasTime ? 'bg-amber-50' : 'bg-slate-50';
+  const numColor   = isRunning ? 'text-violet-700' : hasTime ? 'text-amber-700' : 'text-slate-400';
   const badgeColor = isRunning ? 'bg-violet-100 text-violet-600 border-violet-200'
                    : hasTime   ? 'bg-amber-100  text-amber-600  border-amber-200'
                                : 'bg-slate-100  text-slate-400  border-slate-200';
+
+  // Below-minimum warning (after stop, before send)
+  const belowMin = !isRunning && hasTime && totalHours && hoursFloat < totalHours;
 
   return (
     <div
@@ -218,23 +279,27 @@ export default function WorkingHoursModal({
             </span>
             <h2 className="text-sm font-extrabold text-slate-800">{t.title}</h2>
           </div>
-          {/* × always enabled — timer keeps running in background */}
           <button
             onClick={handleClose}
             className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition text-base leading-none flex-shrink-0"
           >×</button>
         </div>
 
-        {/* Info card — compact single line */}
+        {/* Info row */}
         <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-x-4 gap-y-0.5">
           <span className="text-[11px] text-slate-500"><span className="font-bold text-slate-400">Site</span> {siteName}</span>
           <span className="text-[11px] text-slate-500"><span className="font-bold text-slate-400">Date</span> {date}</span>
           {professionality && <span className="text-[11px] text-slate-500"><span className="font-bold text-slate-400">Trade</span> {professionality}</span>}
+          {totalHours && (
+            <span className="text-[11px] font-semibold text-violet-600">
+              <span className="font-bold text-slate-400">Min</span> {totalHours}h required
+            </span>
+          )}
         </div>
 
-        {/* Clock + status row */}
+        {/* Clock + status */}
         <div className="px-4 pt-3 pb-2 flex items-center gap-4">
-          {/* Clock circle — smaller */}
+          {/* Clock circle */}
           <div className={`relative w-24 h-24 rounded-full flex items-center justify-center ring-4 ring-offset-2 shadow-md transition-all duration-300 flex-shrink-0 ${ringColor} ${bgColor}`}>
             {isRunning && (
               <div className="absolute inset-0 rounded-full ring-4 ring-violet-300 animate-ping opacity-30" />
@@ -251,7 +316,7 @@ export default function WorkingHoursModal({
             </div>
           </div>
 
-          {/* Right side: status + estimated sum */}
+          {/* Right side: status + cost breakdown */}
           <div className="flex-1 min-w-0 space-y-1.5">
             <div className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border ${badgeColor}`}>
               {isRunning && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse" />}
@@ -265,13 +330,31 @@ export default function WorkingHoursModal({
               </div>
             )}
 
+            {/* Workers × rate line */}
+            {hourlyRate && workers > 1 && (
+              <div className="text-[11px] font-semibold text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+                👷 {workers} workers × ${hourlyRate}/hr
+                <span className="text-slate-400 ml-1">= <span className="font-bold text-slate-700">${effectiveRate?.toFixed(2)}/hr</span></span>
+              </div>
+            )}
+
+            {/* Total cost */}
             {hasTime && orderSum !== null && (
               <div className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
                 💰 <span className="font-extrabold">${orderSum}</span>
-                <span className="text-emerald-500 font-normal ml-1">({hoursFloat}h × ${hourlyRate}/hr)</span>
+                <span className="text-emerald-500 font-normal ml-1">
+                  ({hoursFloat}h × {workers > 1 ? `${workers} × ` : ''}${hourlyRate}/hr)
+                </span>
               </div>
             )}
             {!hourlyRate && <p className="text-[10px] text-slate-400">{t.noRate}</p>}
+
+            {/* Below-minimum warning */}
+            {belowMin && (
+              <div className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                ⚠️ Min {totalHours}h — recorded {hoursFloat}h
+              </div>
+            )}
           </div>
         </div>
 
@@ -288,8 +371,11 @@ export default function WorkingHoursModal({
             </button>
           </div>
 
-          <button onClick={handleSend} disabled={sending || !hasTime || isRunning || sent}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-sky-400 hover:from-violet-400 hover:to-sky-300 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow shadow-violet-200 transition-all active:scale-[0.99]">
+          <button
+            onClick={handleSend}
+            disabled={sending || !hasTime || isRunning || sent || belowMin}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-violet-500 to-sky-400 hover:from-violet-400 hover:to-sky-300 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow shadow-violet-200 transition-all active:scale-[0.99]"
+          >
             {sending ? (
               <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />{t.btn.sending}</>
             ) : (
@@ -305,7 +391,6 @@ export default function WorkingHoursModal({
             </div>
           )}
 
-          {/* Close button — label changes based on running state */}
           {!sent && (
             <button onClick={handleClose}
               className={`w-full py-2 rounded-xl border font-medium text-xs transition text-center ${
@@ -317,21 +402,6 @@ export default function WorkingHoursModal({
             </button>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Small helper sub-component ────────────────────────────────────────────────
-function Row({ icon, label, value, bold, small }) {
-  return (
-    <div className="flex items-start gap-2 min-w-0">
-      <span className="text-xs mt-0.5 flex-shrink-0 w-4 text-center">{icon}</span>
-      <div className="min-w-0">
-        <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mr-1">{label}</span>
-        <span className={`${small ? 'text-[11px] text-slate-500' : bold ? 'text-xs font-bold text-slate-800' : 'text-xs text-slate-600'} break-words`}>
-          {value}
-        </span>
       </div>
     </div>
   );

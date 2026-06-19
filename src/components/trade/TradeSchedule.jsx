@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { updateSchedule, findJobs, requestReschedule, removeBooking, getTradeChatBySite, uploadChatFile as tradeUploadChatFile, checkWorkLog } from '../../api/trade.js';
+import { getMe, updateSchedule, findJobs, requestReschedule, removeBooking, getTradeChatBySite, uploadChatFile as tradeUploadChatFile, checkWorkLog } from '../../api/trade.js';
 import useUIStore from '../../stores/uiStore.js';
 import useAuthStore from '../../stores/authStore.js';
 import { toast } from '../../utils/toast.js';
@@ -189,10 +189,26 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   const isMaxMonth = viewYear === maxYear && viewMonth === maxMonth;
 
   const [busyDays,   setBusyDays]   = useState(() => new Set(initialBusyDays));
+  // liveBookings: authoritative booking list fetched fresh from the server on mount.
+  // Falls back to the prop until the API responds, so the calendar renders immediately
+  // with whatever data the parent already has, then silently updates once fresh data arrives.
+  const [liveBookings, setLiveBookings] = useState(initialBookings);
+  const [bookingsReady, setBookingsReady] = useState(false);
 
-  // Build a per-date map from DB bookings (handles both new { dates[], status } and legacy { date })
+  // ── Fetch fresh bookings from server on mount ──────────────────────────────
+  useEffect(() => {
+    getMe()
+      .then((trade) => {
+        if (trade?.bookings) setLiveBookings(trade.bookings);
+        if (trade?.busyDays) setBusyDays(new Set(trade.busyDays));
+      })
+      .catch(() => {/* keep initialBookings as fallback */})
+      .finally(() => setBookingsReady(true));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Build a per-date map from LIVE bookings (handles both new { dates[], status } and legacy { date })
   const bookingDateMap = {};
-  initialBookings.forEach(b => {
+  liveBookings.forEach(b => {
     const ds = b.dates?.length ? b.dates : (b.date ? [b.date] : []);
     ds.forEach(d => { bookingDateMap[d] = b; });
   });
@@ -365,32 +381,52 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
               <div key={key} className="relative group">
                 <button
                   onClick={handleDayClick}
-                  className={`relative w-full aspect-square rounded-xl ring-1 ring-black/25 text-sm font-semibold flex items-center justify-center transition-all duration-150 active:scale-90 select-none
+                  className={`relative w-full aspect-square rounded-xl ring-1 ring-black/25 text-sm font-semibold flex transition-all duration-150 active:scale-90 select-none overflow-hidden
                     ${isApprovedOrder
-                      ? `bg-sky-300 text-white shadow-sm shadow-sky-200 cursor-pointer ${activeBookedKey === key ? 'ring-2 ring-offset-1 ring-sky-500 scale-105' : 'hover:bg-sky-400'}`
+                      ? `items-center justify-center bg-sky-300 text-white shadow-sm shadow-sky-200 cursor-pointer ${activeBookedKey === key ? 'ring-2 ring-offset-1 ring-sky-500 scale-105' : 'hover:bg-sky-400'}`
                       : isBooked
-                      ? `bg-red-400 text-white shadow-sm shadow-red-200 cursor-pointer ${activeBookedKey === key ? 'ring-2 ring-offset-1 ring-red-600 scale-105' : 'hover:bg-red-500'}`
-                      : isRescheduleNew
-                        ? 'bg-violet-500 text-white shadow-sm shadow-violet-200 ring-2 ring-violet-600 ring-offset-1 scale-105'
-                      : (isOrder || isApplied)
-                        ? 'bg-amber-400 text-white shadow-sm shadow-amber-200 cursor-default'
-                        : isPending
-                          ? 'bg-amber-400 text-white shadow-sm shadow-amber-200 ring-2 ring-amber-500 ring-offset-1'
-                          : isOff
-                            ? 'bg-red-300 text-white shadow-sm shadow-red-100'
-                            : isNonWorking
-                              ? 'bg-emerald-200 text-emerald-700 shadow-sm'
-                              : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
+                        ? `flex-col items-center justify-start pt-1 ring-red-300 bg-red-100 text-red-700 shadow-sm shadow-red-100 cursor-pointer ${activeBookedKey === key ? 'ring-2 ring-offset-1 ring-red-400 scale-105' : 'hover:bg-red-200'}`
+                        : isRescheduleNew
+                          ? 'items-center justify-center bg-violet-500 text-white shadow-sm shadow-violet-200 ring-2 ring-violet-600 ring-offset-1 scale-105'
+                          : (isOrder || isApplied)
+                            ? 'items-center justify-center bg-amber-400 text-white shadow-sm shadow-amber-200 cursor-default'
+                            : isPending
+                              ? 'items-center justify-center bg-amber-400 text-white shadow-sm shadow-amber-200 ring-2 ring-amber-500 ring-offset-1'
+                              : isOff
+                                ? 'items-center justify-center bg-red-300 text-white shadow-sm shadow-red-100'
+                                : isNonWorking
+                                  ? 'items-center justify-center bg-emerald-200 text-emerald-700 shadow-sm'
+                                  : 'items-center justify-center bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
                     ${isToday && !isPending ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}
                 >
-                  <span className="leading-none">{day}</span>
-                  {(isBooked || isOrder) && dbBooking?.siteName && (
-                    <span className="absolute bottom-0.5 left-0 right-0 text-[6px] font-bold text-white/90 text-center px-0.5 truncate leading-none">
-                      {dbBooking.siteName}
-                    </span>
+                  {isBooked && !isApprovedOrder ? (
+                    /* ── Booked day: day number at top + site name below ── */
+                    <>
+                      <span className="text-xs font-bold leading-none text-red-500">{day}</span>
+                      {dbBooking?.siteName && (
+                        <span className="w-full px-0.5 mt-0.5 text-[7px] font-bold text-red-600 text-center leading-tight line-clamp-3 break-words">
+                          {dbBooking.siteName}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    /* ── All other days ── */
+                    <>
+                      <span className="leading-none">{day}</span>
+                      {isApprovedOrder && dbBooking?.siteName && (
+                        <span className="absolute bottom-0.5 left-0 right-0 text-[6px] font-bold text-white/90 text-center px-0.5 truncate leading-none">
+                          {dbBooking.siteName}
+                        </span>
+                      )}
+                      {isOrder && !isApprovedOrder && dbBooking?.siteName && (
+                        <span className="absolute bottom-0.5 left-0 right-0 text-[6px] font-bold text-white/90 text-center px-0.5 truncate leading-none">
+                          {dbBooking.siteName}
+                        </span>
+                      )}
+                      {!(isBooked || isOrder) && (isApplied || isPending) && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/80" />}
+                      {isToday && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/80" />}
+                    </>
                   )}
-                  {!(isBooked || isOrder) && (isApplied || isPending) && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/80" />}
-                  {isToday && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/80" />}
                 </button>
                 {dbBooking && (
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-10 hidden group-hover:block w-64 bg-slate-800 text-white text-xs rounded-xl px-3 py-2 shadow-xl pointer-events-none">
@@ -447,7 +483,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
         <div className="flex items-center gap-3 px-3 sm:px-6 py-2 sm:py-3 border-b border-sky-50 bg-sky-50/40 overflow-x-auto scrollbar-none flex-nowrap">
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-emerald-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.free}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-300" /><span className="text-xs text-slate-500 font-medium">{t.legend.busy}</span></div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-red-200 border border-red-300" /><span className="text-xs text-slate-500 font-medium">{t.legend.booked}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-sky-300" /><span className="text-xs text-slate-500 font-medium">{t.legend.approved}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full border-2 border-sky-400" /><span className="text-xs text-slate-500 font-medium">{t.legend.today}</span></div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-amber-400" /><span className="text-xs text-slate-500 font-medium">{t.legendPending}</span></div>
@@ -484,6 +520,8 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             try {
               await removeBooking(bk.siteId);
               toast.success(`Booking removed for ${bk.siteName}`, { duration: 4000 });
+              // Remove from live bookings so calendar re-renders instantly
+              setLiveBookings((prev) => prev.filter((b) => String(b.siteId) !== String(bk.siteId)));
               setActiveBookedKey(null);
               setRescheduleMode(false);
               setRescheduleNewKey(null);
@@ -699,6 +737,8 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             siteId={String(bk.siteId ?? '')}
             professionality={professionality}
             hourlyRate={hourlyRate}
+            totalHours={bk.totalHours ?? null}
+            workersNo={bk.workers_no ?? 1}
             bgTimerRef={bgTimerRef}
             timerRunning={timerRunning}
             setTimerRunning={setTimerRunning}
