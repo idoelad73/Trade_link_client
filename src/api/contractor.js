@@ -12,9 +12,14 @@ export const updateSite  = (id, form) => api.patch(`/contractor/sites/${id}`, fo
 export const deleteSite  = (id)    => api.delete(`/contractor/sites/${id}`).then(r => r.data);
 
 // Trade search
-export const findTradesForSite = (siteId, trade, distance, unit, maxRate) =>
-  api.get(`/contractor/sites/${siteId}/find-trades`, { params: { trade, distance, unit, ...(maxRate ? { maxRate } : {}) } })
-     .then(r => r.data);
+export const findTradesForSite = (siteId, trade, distance, unit, maxRate, minRating) =>
+  api.get(`/contractor/sites/${siteId}/find-trades`, {
+    params: {
+      trade, distance, unit,
+      ...(maxRate   ? { maxRate }   : {}),
+      ...(minRating ? { minRating } : {}),
+    },
+  }).then(r => r.data);
 
 // Trade pro calendar (busy days)
 export const getTradeBusyDays = (tradeId) =>
@@ -49,3 +54,7 @@ export const getPaymentApprovals       = ()               => api.get('/contracto
 // Returns { deleted: true, _id } on rejection OR { order } on approval
 export const updatePaymentApproval = (orderId, status) => api.patch(`/contractor/payment-approvals/${orderId}`, { status }).then(r => r.data);
 
+
+// Trade grading
+export const getGradableTrades = () => api.get('/contractor/trade-grades/eligible').then(r => r.data.trades);
+export const submitTradeGrade  = (trade_id, site_id, order_id, trade_grade) => api.post('/contractor/trade-grades', { trade_id, site_id, order_id, trade_grade }).then(r => r.data);

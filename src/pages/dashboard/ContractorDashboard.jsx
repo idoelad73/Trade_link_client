@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount } from '../../api/contractor.js';
+import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades } from '../../api/contractor.js';
 import ContractorInfoModal from '../../components/contractor/ContractorInfoModal.jsx';
 import AddSiteModal from '../../components/contractor/AddSiteModal.jsx';
 import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx';
 import UpdateSitePhotoModal from '../../components/contractor/UpdateSitePhotoModal.jsx';
 import ContractorApplicationsModal from '../../components/contractor/ContractorApplicationsModal.jsx';
+import TradeGradesListModal from '../../components/contractor/TradeGradesListModal.jsx';
 
 const content = {
   en: {
@@ -437,26 +438,29 @@ function DistancePanel({ unit, setUnit, distance, setDistance, maxRate, setMaxRa
 
       <div className="border-t border-slate-100" />
 
-      {/* Min rating (UI only — backend coming soon) */}
+      {/* Min rating */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="text-sm font-bold text-slate-700">⭐ Trade Rating</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Minimum rating — coming soon</p>
+            <p className="text-xs text-slate-400 mt-0.5">Minimum grade to show</p>
           </div>
-          <span className="text-lg font-extrabold text-slate-300">
-            {minRating > 0 ? `${minRating}+` : 'Any'}
+          <span className={`text-lg font-extrabold ${minRating > 0 ? 'text-amber-500' : 'text-slate-400'}`}>
+            {minRating > 0 ? `${minRating}★ & up` : 'Any'}
           </span>
         </div>
         <input
-          type="range" min={0} max={5} step={0.5} value={minRating}
+          type="range" min={0} max={5} step={1} value={minRating}
           onChange={(e) => setMinRating(Number(e.target.value))}
-          className="w-full h-2 rounded-full appearance-none cursor-pointer opacity-40 cursor-not-allowed"
-          style={{ background: `linear-gradient(to right, #94a3b8 0%, #94a3b8 ${ratingPct}%, #e2e8f0 ${ratingPct}%, #e2e8f0 100%)` }}
-          disabled
+          className="w-full h-2 rounded-full appearance-none cursor-pointer"
+          style={{ background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${ratingPct}%, #fde68a ${ratingPct}%, #fde68a 100%)` }}
         />
-        <div className="flex justify-between text-xs text-slate-300 mt-1 px-0.5">
-          <span>0</span><span>5 ⭐</span>
+        <div className="flex justify-between text-xs text-slate-400 mt-1 px-0.5">
+          <span>Any</span>
+          <div className="flex gap-3.5 text-slate-300">
+            {[1,2,3,4,5].map(n => <span key={n}>{n}</span>)}
+          </div>
+          <span>⭐ 5</span>
         </div>
       </div>
 
@@ -494,6 +498,8 @@ export default function ContractorDashboard() {
   const [applicationsOpen,     setApplicationsOpen]     = useState(false);
   const [applicationsCount,    setApplicationsCount]    = useState(0);
   const [pendingPayments,      setPendingPayments]      = useState(0);
+  const [gradableTrades,       setGradableTrades]       = useState(null); // null = not loaded yet
+  const [gradeLoading,         setGradeLoading]         = useState(false);
 
   const refreshApplicationCount = () =>
     getApplications()
@@ -527,7 +533,30 @@ export default function ContractorDashboard() {
   const kmValue     = Math.round(distance * 1.609);
   const displayDist = unit === 'mi' ? `${distance} mi` : `${kmValue} km`;
 
-  useEffect(() => { refreshApplicationCount(); refreshPaymentCount(); }, []);
+  useEffect(() => {
+    refreshApplicationCount();
+    refreshPaymentCount();
+    // Fetch gradable trades once on login — show modal if any need reviewing
+    getGradableTrades()
+      .then(trades => { if (trades?.length) setGradableTrades(trades); })
+      .catch(() => {});
+  }, []);
+
+  async function handleOpenGradeModal() {
+    if (gradableTrades !== null) {
+      // Already loaded — just show the modal (re-open after close)
+      return;
+    }
+    setGradeLoading(true);
+    try {
+      const trades = await getGradableTrades();
+      setGradableTrades(trades?.length ? trades : []);
+    } catch {
+      setGradableTrades([]);
+    } finally {
+      setGradeLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (activeView === 'allSites') {
@@ -566,7 +595,7 @@ export default function ContractorDashboard() {
     const tradeEntry = site.tradesNeeded.find((t) => t.name === trade) || {};
     setFindingFor({ siteId: site._id, trade });
     try {
-      const data = await findTradesForSite(site._id, trade, distance, unit, maxRate < MAX_RATE ? maxRate : null);
+      const data = await findTradesForSite(site._id, trade, distance, unit, maxRate < MAX_RATE ? maxRate : null, minRating > 0 ? minRating : null);
       navigate('/dashboard/contractor/trade-search', {
         state: {
           results:      data.results,
@@ -632,6 +661,23 @@ export default function ContractorDashboard() {
                 <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow border-2 border-white leading-none">
                   {pendingPayments > 99 ? '99+' : pendingPayments}
                 </span>
+              )}
+            </button>
+
+            {/* ⭐ Grade your trades icon */}
+            <button
+              onClick={() => {
+                if (gradableTrades !== null) return; // modal already visible
+                handleOpenGradeModal();
+              }}
+              disabled={gradeLoading}
+              title="Grade your trades"
+              className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-amber-50 hover:bg-amber-100 transition active:scale-95 disabled:opacity-60 disabled:cursor-wait"
+            >
+              {gradeLoading ? (
+                <span className="block w-4 h-4 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+              ) : (
+                <span className="text-xl leading-none select-none">⭐</span>
               )}
             </button>
 
@@ -755,6 +801,14 @@ export default function ContractorDashboard() {
         <ContractorApplicationsModal
           onClose={() => setApplicationsOpen(false)}
           onApproved={() => { refreshApplicationCount(); refreshSites(); }}
+        />
+      )}
+
+      {/* Trade Grading — pops up automatically when ungraded trades exist */}
+      {gradableTrades && (
+        <TradeGradesListModal
+          trades={gradableTrades}
+          onClose={() => setGradableTrades(null)}
         />
       )}
     </div>

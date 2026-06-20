@@ -16,6 +16,61 @@ function isBusyToday(busyDays = []) {
   return busyDays.includes(key);
 }
 
+// Round to nearest 0.5  (e.g. 3.1→3.0, 3.26→3.5, 3.75→4.0)
+function roundHalf(n) {
+  return Math.round(n * 2) / 2;
+}
+
+// Single star — full / half / empty
+function StarIcon({ fill }) {
+  if (fill === 'full')  return <span className="text-amber-400 leading-none" style={{ fontSize: 13 }}>★</span>;
+  if (fill === 'empty') return <span className="text-slate-200 leading-none" style={{ fontSize: 13 }}>★</span>;
+  // half — clip a filled star to 50 % width over an empty base
+  return (
+    <span className="relative inline-block leading-none" style={{ fontSize: 13 }}>
+      <span className="text-slate-200">★</span>
+      <span className="absolute inset-0 overflow-hidden text-amber-400" style={{ width: '50%' }}>★</span>
+    </span>
+  );
+}
+
+// Grade badge shown on each trade card
+function GradeBadge({ avg, count }) {
+  if (!avg) return null;
+  const rounded = roundHalf(avg);
+
+  const COLOR =
+    rounded >= 4.5 ? { bg: '#eef9f0', border: '#86efac', text: '#16a34a' } :
+    rounded >= 3.5 ? { bg: '#fefce8', border: '#fde047', text: '#ca8a04' } :
+    rounded >= 2.5 ? { bg: '#fff7ed', border: '#fdba74', text: '#ea580c' } :
+                     { bg: '#fff1f2', border: '#fca5a5', text: '#dc2626' };
+
+  return (
+    <div
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border"
+      style={{ background: COLOR.bg, borderColor: COLOR.border }}
+    >
+      {/* Stars */}
+      <div className="flex items-center gap-px">
+        {[1, 2, 3, 4, 5].map((n) => {
+          const fill = rounded >= n ? 'full' : rounded >= n - 0.5 ? 'half' : 'empty';
+          return <StarIcon key={n} fill={fill} />;
+        })}
+      </div>
+      {/* Numeric value */}
+      <span className="text-xs font-extrabold leading-none" style={{ color: COLOR.text }}>
+        {rounded.toFixed(1)}
+      </span>
+      {/* Review count */}
+      {count > 0 && (
+        <span className="text-[10px] font-medium text-slate-400 leading-none">
+          ({count})
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ── Content strings ───────────────────────────────────────────────────────────
 const content = {
   en: {
@@ -69,6 +124,10 @@ function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, o
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-slate-800 text-base truncate">{pro.fullName}</p>
+          {pro.avgGrade
+            ? <div className="mt-0.5 mb-0.5"><GradeBadge avg={pro.avgGrade} count={pro.gradeCount ?? 0} /></div>
+            : <p className="text-[10px] text-slate-300 italic mt-0.5">No reviews yet</p>
+          }
           {siteBooking
             ? <p className="text-xs text-slate-400 truncate">📍 {pro.address}</p>
             : <p className="text-xs text-slate-300 italic truncate">Address visible after booking</p>
