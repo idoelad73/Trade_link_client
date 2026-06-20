@@ -88,10 +88,14 @@ function OrderRow({ order, t, onApprove, onReject }) {
   const canAct = order.status === 'pending';
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-4 transition hover:shadow-md">
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 sm:px-6 py-4 transition hover:shadow-md
+      flex flex-col gap-3
+      sm:grid sm:items-center sm:gap-4"
+      style={{ gridTemplateColumns: '1fr 100px 130px 170px auto' }}
+    >
 
       {/* Trade professional info */}
-      <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="flex items-center gap-3 min-w-0">
         {pro?.photo
           ? <img src={pro.photo} alt={pro?.fullName} className="w-10 h-10 rounded-xl object-cover object-top border border-slate-100 flex-shrink-0" />
           : <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-100 to-sky-100 flex items-center justify-center text-lg flex-shrink-0">🔧</div>
@@ -103,30 +107,44 @@ function OrderRow({ order, t, onApprove, onReject }) {
         </div>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-3 gap-3 flex-shrink-0 text-center">
-        {/* Date */}
-        <div className="flex flex-col items-center">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5">{t.col.date}</span>
-          <span className="text-xs font-semibold text-slate-700">{order.date}</span>
-        </div>
-        {/* Actual hours */}
-        <div className="flex flex-col items-center">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5">{t.col.hours}</span>
-          <span className="text-sm font-extrabold text-violet-600">{order.actual_hours}<span className="text-xs font-normal text-slate-400 ml-0.5">{t.hourSuffix}</span></span>
-        </div>
-        {/* Order sum */}
-        <div className="flex flex-col items-center">
-          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5">{t.col.sum}</span>
-          {order.order_sum > 0 ? (
+      {/* Date */}
+      <div className="flex flex-col items-center text-center">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5">{t.col.date}</span>
+        <span className="text-xs font-semibold text-slate-700">{order.date}</span>
+      </div>
+
+      {/* Actual hours */}
+      <div className="flex flex-col items-center text-center">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5">{t.col.hours}</span>
+        <span className="text-sm font-extrabold text-violet-600">
+          {order.actual_hours}
+          <span className="text-xs font-normal text-slate-400 ml-0.5">{t.hourSuffix}</span>
+        </span>
+        {/* Show original submitted hours when min was enforced */}
+        {order.min_hours > 0 && order.submitted_hours != null && order.submitted_hours < order.min_hours && (
+          <span className="text-[10px] text-amber-500 font-semibold mt-0.5 leading-tight text-center">
+            ⚠️ min {order.min_hours}h enforced
+          </span>
+        )}
+      </div>
+
+      {/* Order sum */}
+      <div className="flex flex-col items-center text-center">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-0.5">{t.col.sum}</span>
+        {order.order_sum > 0 ? (
+          <>
             <span className="text-sm font-extrabold text-emerald-600">${order.order_sum.toFixed(2)}</span>
-          ) : (
-            <span className="text-xs text-slate-400">{t.noRate}</span>
-          )}
-          {order.hourly_rate > 0 && (
-            <span className="text-[10px] text-slate-400 mt-0.5">${order.hourly_rate}/hr</span>
-          )}
-        </div>
+            {order.hourly_rate > 0 && (
+              <span className="text-[12px] text-slate-400 mt-0.5 text-center leading-tight">
+                {(order.workers_no ?? 1) > 1
+                  ? `${order.workers_no}w × ${order.actual_hours}h × $${order.hourly_rate}/hr`
+                  : `${order.actual_hours}h × $${order.hourly_rate}/hr`}
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="text-xs text-slate-400">{t.noRate}</span>
+        )}
       </div>
 
       {/* Status + action buttons */}
@@ -200,6 +218,13 @@ export default function PaymentApprovalsPage() {
   const handleApprove = async (order) => {
     const pro = order.trade_id;
 
+    const workers   = order.workers_no ?? 1;
+    const breakdownLine = order.hourly_rate > 0
+      ? (workers > 1
+          ? `${workers} workers × ${order.actual_hours}h × $${order.hourly_rate}/hr`
+          : `${order.actual_hours}h × $${order.hourly_rate}/hr`)
+      : `${order.actual_hours} hrs`;
+
     const { isConfirmed } = await Swal.fire({
       title:              t.confirmTitle(pro?.fullName ?? ''),
       html: `
@@ -209,8 +234,11 @@ export default function PaymentApprovalsPage() {
         <p style="font-size:22px;font-weight:800;color:#10b981;margin-top:12px;">
           $${order.order_sum?.toFixed(2) ?? '0.00'}
         </p>
-        <p style="font-size:11px;color:#94a3b8;margin-top:4px;">
-          ${order.actual_hours} hrs · ${order.date}
+        <p style="font-size:11px;color:#64748b;margin-top:4px;font-weight:600;">
+          ${breakdownLine}
+        </p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:2px;">
+          ${order.date}
         </p>
       `,
       icon:               'question',

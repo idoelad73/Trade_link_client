@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../../components/Navbar';
 import useUIStore from '../../stores/uiStore';
@@ -169,6 +169,150 @@ function SectionHeader({ children }) {
       <div className="h-px flex-1 bg-gradient-to-l from-amber-200 to-transparent" />
     </div>
   );
+}
+
+/* ── Address autocomplete (proxied through /api/address/autocomplete) ──────
+   onSelect({ street, city, state, zip }) auto-fills all four trade form fields */
+function fmtAddr(p) {
+  const parts = [];
+  if (p.housenumber && p.street) parts.push(`${p.housenumber} ${p.street}`);
+  else if (p.street) parts.push(p.street);
+  else if (p.name)   parts.push(p.name);
+  if (p.city)     parts.push(p.city);
+  if (p.state)    parts.push(p.state);
+  if (p.postcode) parts.push(p.postcode);
+  return parts.join(', ');
+}
+
+function AddressField({ onSelect, inputCls, placeholder, required }) {
+  const [query,   setQuery]   = useState('');
+  const [items,   setItems]   = useState([]);  // [{label, props}]
+  const [busy,    setBusy]    = useState(false);
+  const [hi,      setHi]      = useState(-1);
+  const [dropPos, setDropPos] = useState(null);
+  const inputRef = useRef(null);
+  const skipRef  = useRef(false);
+
+  useEffect(() => {
+    if (skipRef.current) { skipRef.current = false; return; }
+    const q = query.trim();
+    if (q.length < 3) { setItems([]); setBusy(false); return; }
+
+    let cancelled = false;
+    setBusy(true);
+
+    const tid = setTimeout(async () => {
+      try {
+        const res  = await fetch(`/api/address/autocomplete?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (cancelled) return;
+        const list = (data.features || [])
+          .map(f => ({ label: fmtAddr(f.properties), props: f.properties }))
+          .filter(x => x.label)
+          .filter((x, i, arr) => arr.findIndex(y => y.label === x.label) === i);
+        setItems(list); setHi(-1);
+        if (list.length && inputRef.current) {
+          const r = inputRef.current.getBoundingClientRect();
+          setDropPos({ top: r.bottom + 4, left: r.left, width: r.width });
+        }
+      } catch { if (!cancelled) setItems([]); }
+      finally  { if (!cancelled) setBusy(false); }
+    }, 400);
+
+    return () => { cancelled = true; clearTimeout(tid); };
+  }, [query]);
+
+  useEffect(() => {
+    const fn = (e) => { if (inputRef.current && !inputRef.current.parentNode.contains(e.target)) setItems([]); };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, []);
+
+  function pick(item) {
+    skipRef.current = true;
+    const p = item.props;
+    const street = p.housenumber && p.street
+      ? `${p.housenumber} ${p.street}`
+      : (p.street || p.name || '');
+    // Auto-fill all four fields
+    onSelect({
+      address: street,
+      city:    p.city    || p.locality || '',
+      state:   p.state   ? usStateAbbr(p.state) : '',
+      zip:     p.postcode || '',
+    });
+    setQuery(street);
+    setItems([]); setHi(-1);
+  }
+
+  function onKey(e) {
+    if (e.key === 'ArrowDown')            { e.preventDefault(); setHi(h => Math.min(h + 1, items.length - 1)); }
+    else if (e.key === 'ArrowUp')         { e.preventDefault(); setHi(h => Math.max(h - 1, -1)); }
+    else if (e.key === 'Enter' && hi >= 0){ e.preventDefault(); pick(items[hi]); }
+    else if (e.key === 'Escape')            setItems([]);
+  }
+
+  const charsLeft = 3 - query.trim().length;
+
+  return (
+    <div className="relative">
+      <style>{`@keyframes addr-spin{to{transform:rotate(360deg)}}`}</style>
+      <div className="relative">
+        <input
+          ref={inputRef} type="text" autoComplete="off" required={required}
+          value={query}
+          onChange={e => { setQuery(e.target.value); onSelect({ address: e.target.value }); }}
+          onKeyDown={onKey} placeholder={placeholder} className={inputCls}
+        />
+        {busy && (
+          <span aria-hidden style={{position:'absolute',right:12,top:'50%',marginTop:-7,width:14,height:14,border:'2px solid #38bdf8',borderTopColor:'transparent',borderRadius:'50%',animation:'addr-spin 0.65s linear infinite',display:'inline-block'}}/>
+        )}
+      </div>
+
+      {busy && <p style={{fontSize:11,color:'#0284c7',marginTop:3}}>Searching…</p>}
+      {!busy && query.trim().length > 0 && charsLeft > 0 && (
+        <p style={{fontSize:11,color:'#94a3b8',marginTop:3}}>
+          Type {charsLeft} more character{charsLeft !== 1 ? 's' : ''} to search…
+        </p>
+      )}
+
+      {items.length > 0 && dropPos && (
+        <ul style={{position:'fixed',top:dropPos.top,left:dropPos.left,width:dropPos.width,zIndex:9999,background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,boxShadow:'0 8px 30px rgba(0,0,0,.12)',overflow:'hidden',fontSize:14,margin:0,padding:0,listStyle:'none'}}>
+          {items.map((item, i) => (
+            <li key={item.label}
+              onMouseDown={e => { e.preventDefault(); pick(item); }}
+              onMouseEnter={() => setHi(i)}
+              style={{display:'flex',alignItems:'center',gap:8,padding:'10px 16px',cursor:'pointer',background:i===hi?'#f0f9ff':'#fff',color:i===hi?'#0369a1':'#334155',borderTop:i>0?'1px solid #f1f5f9':'none'}}>
+              <span>📍</span>
+              <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.label}</span>
+            </li>
+          ))}
+          <li style={{padding:'4px 16px',fontSize:10,color:'#94a3b8',borderTop:'1px solid #f1f5f9'}}>
+            <a href="https://photon.komoot.io" target="_blank" rel="noreferrer" style={{textDecoration:'underline'}}>Photon / OpenStreetMap</a>
+          </li>
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Convert full US state name → 2-letter abbreviation
+const STATE_MAP = {
+  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA',
+  'Colorado':'CO','Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA',
+  'Hawaii':'HI','Idaho':'ID','Illinois':'IL','Indiana':'IN','Iowa':'IA','Kansas':'KS',
+  'Kentucky':'KY','Louisiana':'LA','Maine':'ME','Maryland':'MD','Massachusetts':'MA',
+  'Michigan':'MI','Minnesota':'MN','Mississippi':'MS','Missouri':'MO','Montana':'MT',
+  'Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ','New Mexico':'NM',
+  'New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH','Oklahoma':'OK',
+  'Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC',
+  'South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT',
+  'Virginia':'VA','Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY',
+};
+function usStateAbbr(name) {
+  if (!name) return '';
+  if (name.length === 2) return name.toUpperCase();
+  return STATE_MAP[name] || name;
 }
 
 function FileField({ label, hint, name, accept, onChange, value }) {
@@ -521,7 +665,20 @@ export default function TradeRegister() {
 
           <div>
             <label className={labelCls}>{t.fields.address}</label>
-            <input className={inputCls} required value={form.address} onChange={set('address')} placeholder={t.placeholders.address} />
+            <AddressField
+              required
+              inputCls={inputCls}
+              placeholder={t.placeholders.address}
+              onSelect={({ address, city, state, zip }) =>
+                setForm(f => ({
+                  ...f,
+                  ...(address !== undefined && { address }),
+                  ...(city    !== undefined && city    && { city }),
+                  ...(state   !== undefined && state   && { state }),
+                  ...(zip     !== undefined && zip     && { zip }),
+                }))
+              }
+            />
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

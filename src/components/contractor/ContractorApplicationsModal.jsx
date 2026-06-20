@@ -188,21 +188,42 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                         <p className="text-[10px] text-sky-500 truncate mt-0.5">📍 {app.site?.address}</p>
                       </div>
 
-                      {/* Rate */}
-                      <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5">
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">{t.rate}</p>
-                        <p className="text-xs font-bold text-slate-700">
-                          {app.tradePro?.hourlyRate ? `💰 $${app.tradePro.hourlyRate}/hr` : '—'}
+                      {/* Workers offered */}
+                      <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5">
+                        <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wide mb-0.5">Workers</p>
+                        <p className="text-xs font-bold text-amber-700">
+                          👷 {app.workersOffered ?? 1} worker{(app.workersOffered ?? 1) !== 1 ? 's' : ''}
                         </p>
-                        {te && te.budgetType === 'hours' && te.totalHours && app.tradePro?.hourlyRate && (
-                          <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
-                            {te.totalHours}h × ${app.tradePro.hourlyRate} = ${te.totalHours * app.tradePro.hourlyRate}
+                        {te?.workers_no > 0 && (
+                          <p className="text-[10px] text-amber-500 mt-0.5">
+                            of {te.workers_no} slot{te.workers_no !== 1 ? 's' : ''} needed
                           </p>
                         )}
-                        {te && te.budgetType === 'amount' && te.maxAmount && (
-                          <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">Budget: ${te.maxAmount}</p>
-                        )}
                       </div>
+
+                      {/* Rate + cost estimate */}
+                      {(app.tradePro?.hourlyRate || (te?.budgetType === 'amount' && te?.maxAmount)) && (
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2.5 sm:col-span-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">{t.rate}</p>
+                          <p className="text-xs font-bold text-slate-700">
+                            {app.tradePro?.hourlyRate ? `💰 $${app.tradePro.hourlyRate}/hr` : '—'}
+                          </p>
+                          {te?.budgetType === 'hours' && te?.totalHours && app.tradePro?.hourlyRate && (() => {
+                            const w     = app.workersOffered ?? 1;
+                            const total = parseFloat((w * te.totalHours * app.tradePro.hourlyRate).toFixed(2));
+                            return (
+                              <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                                {w > 1
+                                  ? `${w}w × ${te.totalHours}h × $${app.tradePro.hourlyRate} = $${total}`
+                                  : `${te.totalHours}h × $${app.tradePro.hourlyRate} = $${total}`}
+                              </p>
+                            );
+                          })()}
+                          {te?.budgetType === 'amount' && te?.maxAmount && (
+                            <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">Budget: ${te.maxAmount}</p>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <p className="px-4 pb-2 text-[10px] text-slate-300">

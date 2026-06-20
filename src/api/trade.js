@@ -7,7 +7,7 @@ export const updateLocation  = (lat, lng)   => api.patch('/trade/location', { la
 export const getMessages     = ()           => api.get('/trade/messages').then(r => r.data.messages);
 export const approveMessage  = (id)         => api.patch(`/trade/messages/${id}/approve`).then(r => r.data);
 export const findJobs        = (distance, unit) => api.get(`/trade/find-jobs?distance=${distance}&unit=${unit}`).then(r => r.data);
-export const applyToJob       = (siteId, lang, date) => api.post(`/trade/jobs/${siteId}/apply`, { lang, date }).then(r => r.data);
+export const applyToJob       = (siteId, lang, date, workers_no = 1) => api.post(`/trade/jobs/${siteId}/apply`, { lang, date, workers_no }).then(r => r.data);
 export const requestReschedule = (siteId, newDate)   => api.post('/trade/reschedule', { siteId, newDate }).then(r => r.data);
 export const removeBooking     = (siteId)            => api.delete('/trade/bookings', { data: { siteId } }).then(r => r.data);
 export const getTradeChatBySite = (siteId) => api.get(`/chat/trade/${siteId}`).then(r => r.data);
