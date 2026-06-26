@@ -158,11 +158,15 @@ function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, o
         ) : (
           <span className="text-xs text-slate-300 italic">No rate</span>
         )}
-        {tradeEntry.budgetType === 'hours' && tradeEntry.totalHours && pro.hourlyRate && (
-          <span className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-2 py-0.5 rounded-lg">
-            {tradeEntry.totalHours}h × ${pro.hourlyRate} = <span className="font-extrabold">${tradeEntry.totalHours * pro.hourlyRate}</span>
-          </span>
-        )}
+        {tradeEntry.budgetType === 'hours' && tradeEntry.totalHours && pro.hourlyRate && (() => {
+          const workers = slotsLeft ?? tradeEntry.workers_no ?? 1;
+          const total   = (tradeEntry.totalHours * workers * pro.hourlyRate).toFixed(2);
+          return (
+            <span className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-2 py-0.5 rounded-lg">
+              {tradeEntry.totalHours}h × {workers} × ${pro.hourlyRate} = <span className="font-extrabold">${total}</span>
+            </span>
+          );
+        })()}
         <div className="ml-auto flex-shrink-0 flex items-center gap-2">
           {slotsLeft != null && !isFull && (
             <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full whitespace-nowrap">

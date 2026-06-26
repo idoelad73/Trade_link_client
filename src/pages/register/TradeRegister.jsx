@@ -207,7 +207,7 @@ function AddressField({ onSelect, inputCls, placeholder, required }) {
         const data = await res.json();
         if (cancelled) return;
         const list = (data.features || [])
-          .map(f => ({ label: fmtAddr(f.properties), props: f.properties }))
+          .map(f => ({ label: fmtAddr(f.properties), props: f.properties, coords: f.geometry?.coordinates }))
           .filter(x => x.label)
           .filter((x, i, arr) => arr.findIndex(y => y.label === x.label) === i);
         setItems(list); setHi(-1);
@@ -234,12 +234,14 @@ function AddressField({ onSelect, inputCls, placeholder, required }) {
     const street = p.housenumber && p.street
       ? `${p.housenumber} ${p.street}`
       : (p.street || p.name || '');
-    // Auto-fill all four fields
+    // coords = [lng, lat] from Photon GeoJSON geometry
+    const [lng, lat] = item.coords || [];
     onSelect({
       address: street,
       city:    p.city    || p.locality || '',
       state:   p.state   ? usStateAbbr(p.state) : '',
       zip:     p.postcode || '',
+      ...(lat != null && lng != null ? { lat, lng } : {}),
     });
     setQuery(street);
     setItems([]); setHi(-1);
@@ -669,13 +671,15 @@ export default function TradeRegister() {
               required
               inputCls={inputCls}
               placeholder={t.placeholders.address}
-              onSelect={({ address, city, state, zip }) =>
+              onSelect={({ address, city, state, zip, lat, lng }) =>
                 setForm(f => ({
                   ...f,
                   ...(address !== undefined && { address }),
                   ...(city    !== undefined && city    && { city }),
                   ...(state   !== undefined && state   && { state }),
                   ...(zip     !== undefined && zip     && { zip }),
+                  // Use Photon's coordinates so stored location matches the typed address
+                  ...(lat != null && lng != null && { latitude: lat, longitude: lng, locationConsent: true }),
                 }))
               }
             />

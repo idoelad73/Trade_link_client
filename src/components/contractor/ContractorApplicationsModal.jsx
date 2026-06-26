@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { getApplications, approveApplication, approveAvailabilityRequest, approveReschedule, declineReschedule } from '../../api/contractor.js';
+import { getApplications, approveApplication, approveWorkerOffer, approveReschedule, declineReschedule, getSiteDepositSummary } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
 import { toast } from '../../utils/toast.js';
+import DepositSummaryModal from './DepositSummaryModal.jsx';
 
 const content = {
   en: {
@@ -46,18 +47,19 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
 
   const [applications,  setApplications]  = useState([]);
   const [reschedules,   setReschedules]   = useState([]);
-  const [sentRequests,  setSentRequests]  = useState([]);
+  const [workerOffers,  setWorkerOffers]  = useState([]);
   const [loading,       setLoading]       = useState(true);
-  const [approving,       setApproving]       = useState(null);
-  const [approvingSent,   setApprovingSent]   = useState(null);
-  const [actingReschedule, setActingReschedule] = useState(null); // id being approved/declined
+  const [approving,        setApproving]        = useState(null);
+  const [approvingOffer,   setApprovingOffer]   = useState(null);
+  const [actingReschedule, setActingReschedule] = useState(null);
+  const [depositData,      setDepositData]      = useState(null);
 
   useEffect(() => {
     getApplications()
-      .then(({ applications: apps = [], reschedules: resc = [], sentRequests: sent = [] }) => {
+      .then(({ applications: apps = [], reschedules: resc = [], workerOffers: offers = [] }) => {
         setApplications(apps);
         setReschedules(resc);
-        setSentRequests(sent);
+        setWorkerOffers(offers);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -73,19 +75,25 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
     if (approving) return;
     setApproving(app._id);
     try {
-      const { blockedApplicationIds = [] } = await approveApplication(app._id, undefined);
+      const { blockedApplicationIds = [], slotsRemaining, siteId } = await approveApplication(app._id, undefined);
 
-      // Mark approved app as accepted; gray out all sibling IDs returned by server
       const blockedSet = new Set(blockedApplicationIds);
       setApplications((prev) =>
         prev.map((a) => {
-          if (a._id === app._id)         return { ...a, status: 'accepted' };
+          if (a._id === app._id)             return { ...a, status: 'accepted' };
           if (blockedSet.has(String(a._id))) return { ...a, _alreadyBooked: true };
           return a;
         })
       );
       toast.success(t.approvedToast(app.tradePro?.fullName ?? ''));
       onApproved?.();
+
+      if (slotsRemaining === 0 && siteId) {
+        try {
+          const summary = await getSiteDepositSummary(siteId);
+          if (summary.total > 0) setDepositData({ siteId, ...summary });
+        } catch { /* non-blocking */ }
+      }
     } catch (err) {
       if (err?.response?.status === 409 && err.response.data?.alreadyAssigned) {
         toast.error(t.alreadyAssigned, { duration: 4000 });
@@ -97,30 +105,13 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
     }
   };
 
-  const handleApproveSent = async (msg) => {
-    if (approvingSent) return;
-    setApprovingSent(msg._id);
-    try {
-      await approveAvailabilityRequest(msg._id);
-      setSentRequests((prev) => prev.filter((m) => m._id !== msg._id));
-      toast.success(`✅ ${msg.tradePro?.fullName} booked for ${msg.requestedDate}`);
-      onApproved?.();
-    } catch (err) {
-      if (err?.response?.status === 409 && err.response.data?.alreadyAssigned) {
-        toast.error(t.alreadyAssigned, { duration: 4000 });
-      } else {
-        toast.error('Failed to approve. Please try again.');
-      }
-    } finally {
-      setApprovingSent(null);
-    }
-  };
 
   const tradeEntry = (app) => app.site?.tradesNeeded?.find(
     (t) => t.name?.toLowerCase() === app.tradePro?.professionality?.toLowerCase()
   );
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
@@ -149,7 +140,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
             <div className="flex items-center justify-center py-16">
               <div className="w-8 h-8 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
             </div>
-          ) : applications.length === 0 && reschedules.length === 0 && sentRequests.length === 0 ? (
+          ) : applications.length === 0 && reschedules.length === 0 && workerOffers.length === 0 ? (
             <div className="text-center py-16 text-slate-400">{t.empty}</div>
           ) : (
             <div className="space-y-4">
@@ -267,58 +258,91 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
             </div>
           )}
 
-          {/* ── Sent availability requests — awaiting trade pro response ── */}
-          {sentRequests.length > 0 && (
+          {/* ── Worker offers awaiting approval ──────────────────────────── */}
+          {workerOffers.length > 0 && (
             <div className={`${applications.length > 0 ? 'mt-5' : ''} space-y-3`}>
-              <p className="text-xs font-bold text-sky-500 uppercase tracking-wide px-1">
-                📤 Sent — Awaiting Response
+              <p className="text-xs font-bold text-orange-500 uppercase tracking-wide px-1">
+                👷 Worker Offers — Pending Approval
               </p>
-              {sentRequests.map((msg) => (
-                <div key={msg._id} className="bg-white rounded-2xl border border-sky-200 shadow-sm overflow-hidden">
-                  <div className="h-1 w-full bg-gradient-to-r from-sky-400 to-emerald-400" />
-                  <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-slate-50">
-                    {msg.tradePro?.photo
-                      ? <img src={msg.tradePro.photo} alt={msg.tradePro.fullName} className="w-11 h-11 rounded-xl object-cover flex-shrink-0 border border-slate-100" />
-                      : <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-sky-50 to-emerald-50 flex items-center justify-center text-xl flex-shrink-0">🔧</div>
-                    }
-                    <div className="flex-1 min-w-0">
-                      <p className="font-extrabold text-slate-800 text-sm truncate">{msg.tradePro?.fullName}</p>
-                      <p className="text-xs text-slate-400 truncate">🔧 {msg.tradePro?.professionality}</p>
+              {workerOffers.map((offer) => {
+                const tradeSlot = offer.site?.tradesNeeded?.find(
+                  (tr) => tr.name?.toLowerCase() === (offer.tradeName || offer.tradePro?.professionality || '').toLowerCase()
+                );
+                const totalNeeded = tradeSlot?.workers_no ?? null;
+                return (
+                  <div key={offer._id} className="bg-white rounded-2xl border border-orange-200 shadow-sm overflow-hidden">
+                    <div className="h-1 w-full bg-gradient-to-r from-orange-400 to-amber-400" />
+                    {/* Trade pro header */}
+                    <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-slate-50">
+                      {offer.tradePro?.photo
+                        ? <img src={offer.tradePro.photo} alt={offer.tradePro.fullName} className="w-11 h-11 rounded-xl object-cover flex-shrink-0 border border-slate-100" />
+                        : <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-orange-50 to-amber-50 flex items-center justify-center text-xl flex-shrink-0">👷</div>
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="font-extrabold text-slate-800 text-sm truncate">{offer.tradePro?.fullName}</p>
+                        <p className="text-xs text-slate-400 truncate">🔧 {offer.tradePro?.professionality}</p>
+                      </div>
+                      <span className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-orange-100 text-orange-600 border border-orange-200 whitespace-nowrap">
+                        ⏳ Pending
+                      </span>
                     </div>
-                    <span className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-100 text-sky-600 border border-sky-200 whitespace-nowrap">
-                      ⏳ Pending
-                    </span>
-                  </div>
-                  <div className="px-4 py-3 grid grid-cols-2 gap-2">
-                    <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Project</p>
-                      <p className="text-xs font-bold text-slate-700 truncate">🏗️ {msg.site?.name}</p>
+                    {/* Details grid */}
+                    <div className="px-4 py-3 grid grid-cols-2 gap-2">
+                      <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Project</p>
+                        <p className="text-xs font-bold text-slate-700 truncate">🏗️ {offer.site?.name}</p>
+                      </div>
+                      <div className="bg-orange-50 border border-orange-100 rounded-xl px-3 py-2">
+                        <p className="text-[10px] font-semibold text-orange-400 uppercase tracking-wide mb-0.5">Scheduled Date</p>
+                        <p className="text-xs font-bold text-orange-700">📅 {offer.requestedDate}</p>
+                      </div>
+                      <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                        <p className="text-[10px] font-semibold text-amber-500 uppercase tracking-wide mb-0.5">Workers Offered</p>
+                        <p className="text-sm font-extrabold text-amber-700">👷 {offer.workersOffered ?? 1}</p>
+                      </div>
+                      {totalNeeded != null && (
+                        <div className="bg-sky-50 border border-sky-100 rounded-xl px-3 py-2">
+                          <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-wide mb-0.5">Total Needed</p>
+                          <p className="text-sm font-extrabold text-sky-700">👥 {totalNeeded}</p>
+                        </div>
+                      )}
                     </div>
-                    <div className="bg-sky-50 border border-sky-100 rounded-xl px-3 py-2">
-                      <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-wide mb-0.5">Requested Date</p>
-                      <p className="text-xs font-bold text-sky-700">📅 {msg.requestedDate}</p>
+                    {/* Trade + hours context */}
+                    {tradeSlot?.totalHours && (
+                      <div className="px-4 pb-1 flex flex-wrap gap-1.5">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-violet-50 border border-violet-100 text-violet-700">
+                          🔧 {offer.tradeName || offer.tradePro?.professionality}
+                        </span>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-sky-50 border border-sky-100 text-sky-700">
+                          ⏱ {tradeSlot.totalHours}h × {offer.workersOffered ?? 1} = {tradeSlot.totalHours * (offer.workersOffered ?? 1)}h
+                        </span>
+                      </div>
+                    )}
+                    {/* Approve button */}
+                    <div className="px-4 pb-4 pt-3">
+                      <button
+                        onClick={async () => {
+                          setApprovingOffer(offer._id);
+                          try {
+                            await approveWorkerOffer(offer._id);
+                            setWorkerOffers((prev) => prev.filter((o) => o._id !== offer._id));
+                            toast.success(`✅ ${offer.tradePro?.fullName} — ${offer.workersOffered} worker${offer.workersOffered !== 1 ? 's' : ''} confirmed`);
+                            onApproved?.();
+                          } catch (err) {
+                            toast.error('Failed to approve. Please try again.');
+                          } finally {
+                            setApprovingOffer(null);
+                          }
+                        }}
+                        disabled={!!approvingOffer}
+                        className="w-full py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 disabled:opacity-60 disabled:cursor-not-allowed transition shadow-sm active:scale-[0.98]"
+                      >
+                        {approvingOffer === offer._id ? '…' : `✓ Approve ${offer.workersOffered ?? 1} Worker${(offer.workersOffered ?? 1) !== 1 ? 's' : ''}`}
+                      </button>
                     </div>
                   </div>
-                  {msg.tradeName && (
-                    <p className="px-4 text-xs text-emerald-600 font-semibold">
-                      👷 {msg.workersOffered ?? 1} worker{(msg.workersOffered ?? 1) !== 1 ? 's' : ''} · {msg.tradeName}
-                    </p>
-                  )}
-                  <p className="px-4 pt-1 pb-3 text-[10px] text-slate-300">
-                    Sent {new Date(msg.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </p>
-                  {/* Approve button — book trade pro directly without waiting for their response */}
-                  <div className="px-4 pb-4">
-                    <button
-                      onClick={() => handleApproveSent(msg)}
-                      disabled={!!approvingSent}
-                      className="w-full py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-60 disabled:cursor-not-allowed transition shadow-sm active:scale-[0.98]"
-                    >
-                      {approvingSent === msg._id ? '…' : '✓ Approve & Book'}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -406,5 +430,17 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
         </div>
       </div>
     </div>
+
+    {depositData && (
+      <DepositSummaryModal
+        siteId={depositData.siteId}
+        siteName={depositData.siteName}
+        rows={depositData.rows}
+        total={depositData.total}
+        onClose={() => setDepositData(null)}
+        onSuccess={() => { setDepositData(null); toast.success('✅ Deposit authorized successfully!'); }}
+      />
+    )}
+    </>
   );
 }

@@ -8,3 +8,6 @@ import api from './axios.js';
  */
 export const createPaymentIntent = (orderId) =>
   api.post('/stripe/create-payment-intent', { orderId }).then((r) => r.data);
+
+export const createDepositIntent = (siteId, amount) =>
+  api.post('/stripe/create-deposit-intent', { siteId, amount }).then((r) => r.data);

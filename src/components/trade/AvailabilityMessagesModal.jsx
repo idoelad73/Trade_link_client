@@ -62,6 +62,9 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
   const [loading,    setLoading]    = useState(true);
   const [approving,  setApproving]  = useState(null); // message _id being approved
 
+  // Workers picker modal state
+  const [workersModal, setWorkersModal] = useState(null); // { msg, count, error, slotsLeft }
+
   // Dates already confirmed — used to disable other pending messages for the same date
   const approvedDates = new Set(
     messages
@@ -77,11 +80,30 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleApprove = async (msg) => {
-    if (approving) return;
+  const openWorkersModal = (msg) => {
+    const tradeSlot = msg.site?.tradesNeeded?.find(
+      (t) => t.name?.toLowerCase() === (msg.tradeName || '').toLowerCase()
+    );
+    const slotsLeft = tradeSlot?.workers_no ?? 1;
+    setWorkersModal({ msg, count: '1', error: '', slotsLeft, tradeSlot });
+  };
+
+  const handleApprove = async () => {
+    if (!workersModal || approving) return;
+    const { msg, count, slotsLeft } = workersModal;
+    const w = parseInt(count);
+    if (isNaN(w) || w < 1) {
+      setWorkersModal((prev) => ({ ...prev, error: 'Minimum 1 worker required' }));
+      return;
+    }
+    if (slotsLeft > 0 && w > slotsLeft) {
+      setWorkersModal((prev) => ({ ...prev, error: `Only ${slotsLeft} slot(s) remaining` }));
+      return;
+    }
+    setWorkersModal(null);
     setApproving(msg._id);
     try {
-      await approveMessage(msg._id);
+      await approveMessage(msg._id, w);
       setMessages((prev) =>
         prev.map((m) => m._id === msg._id ? { ...m, status: 'approved' } : m)
       );
@@ -101,6 +123,7 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
   }, [onClose]);
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
@@ -234,7 +257,7 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
                           </div>
                         ) : (
                           <button
-                            onClick={() => handleApprove(msg)}
+                            onClick={() => openWorkersModal(msg)}
                             disabled={!!approving}
                             className="w-full py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-60 disabled:cursor-not-allowed transition shadow-sm"
                           >
@@ -265,5 +288,106 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
         </div>
       </div>
     </div>
+
+    {/* ── Workers picker mini-modal ───────────────────────────────────── */}
+    {workersModal && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-[2px]">
+        <div className="w-full max-w-xs bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100">
+          <div className="h-1 w-full bg-gradient-to-r from-emerald-400 to-teal-400" />
+
+          <div className="px-6 pt-6 pb-2 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-2xl mx-auto mb-3">👷</div>
+            <h3 className="text-base font-extrabold text-slate-800 mb-1">How many workers?</h3>
+            <p className="text-xs text-slate-400 mb-3">
+              {workersModal.msg.tradeName && <span className="font-semibold text-slate-600">{workersModal.msg.tradeName}</span>}
+              {workersModal.tradeSlot?.totalHours ? ` · ${workersModal.tradeSlot.totalHours}h per worker` : ''}
+            </p>
+
+            {/* Site name */}
+            <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 mb-4">
+              <p className="text-xs font-semibold text-slate-600 truncate">🏗️ {workersModal.msg.site?.name}</p>
+              <p className="text-xs text-slate-400">📅 {workersModal.msg.requestedDate ? formatDate(workersModal.msg.requestedDate) : '—'}</p>
+            </div>
+
+            {/* Full job scope: workers × hours */}
+            {workersModal.slotsLeft > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 text-left space-y-1">
+                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wide">Job Scope</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-extrabold text-amber-700">
+                    👷 {workersModal.slotsLeft} worker{workersModal.slotsLeft !== 1 ? 's' : ''} needed
+                  </span>
+                  {workersModal.tradeSlot?.totalHours && (
+                    <>
+                      <span className="text-slate-300 text-xs">×</span>
+                      <span className="text-sm font-extrabold text-violet-700">
+                        {workersModal.tradeSlot.totalHours}h each
+                      </span>
+                      <span className="text-slate-300 text-xs">=</span>
+                      <span className="text-sm font-extrabold text-emerald-700">
+                        {workersModal.slotsLeft * workersModal.tradeSlot.totalHours}h total
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Number input */}
+            <div className="flex items-center gap-3 mb-2">
+              <button
+                type="button"
+                onClick={() => setWorkersModal((prev) => ({ ...prev, count: String(Math.max(1, parseInt(prev.count) - 1 || 1)), error: '' }))}
+                className="w-11 h-11 flex-shrink-0 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-lg transition active:scale-95"
+              >−</button>
+              <input
+                type="number"
+                min="1"
+                max={workersModal.slotsLeft > 0 ? workersModal.slotsLeft : undefined}
+                value={workersModal.count}
+                onChange={(e) => setWorkersModal((prev) => ({ ...prev, count: e.target.value, error: '' }))}
+                className="flex-1 text-center text-xl font-extrabold text-slate-800 border-2 border-slate-200 focus:border-emerald-400 rounded-xl py-2 outline-none transition"
+              />
+              <button
+                type="button"
+                onClick={() => setWorkersModal((prev) => {
+                  const next = (parseInt(prev.count) || 1) + 1;
+                  if (prev.slotsLeft > 0 && next > prev.slotsLeft) return prev;
+                  return { ...prev, count: String(next), error: '' };
+                })}
+                className="w-11 h-11 flex-shrink-0 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-lg transition active:scale-95"
+              >+</button>
+            </div>
+
+            {workersModal.error && (
+              <p className="text-xs text-red-500 font-semibold mb-2">{workersModal.error}</p>
+            )}
+
+            {/* Total hours preview */}
+            {workersModal.tradeSlot?.totalHours && parseInt(workersModal.count) > 0 && (
+              <p className="text-xs text-violet-600 font-semibold mb-2">
+                Total: {workersModal.tradeSlot.totalHours} h × {parseInt(workersModal.count) || 1} workers = {workersModal.tradeSlot.totalHours * (parseInt(workersModal.count) || 1)} h
+              </p>
+            )}
+          </div>
+
+          <div className="px-6 pb-6 flex gap-2 mt-2">
+            <button
+              onClick={handleApprove}
+              className="flex-1 font-bold py-2.5 rounded-xl text-sm shadow transition-all active:scale-[0.98] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 text-white shadow-emerald-200"
+            >
+              ✓ Approve
+            </button>
+            <button
+              onClick={() => setWorkersModal(null)}
+              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

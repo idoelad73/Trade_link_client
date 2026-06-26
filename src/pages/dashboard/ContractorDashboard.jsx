@@ -503,11 +503,11 @@ export default function ContractorDashboard() {
 
   const refreshApplicationCount = () =>
     getApplications()
-      .then(({ applications = [], reschedules = [], sentRequests = [] }) =>
+      .then(({ applications = [], reschedules = [], workerOffers = [] }) =>
         setApplicationsCount(
           applications.filter(a => a.status === 'pending').length +
           reschedules.length +
-          sentRequests.length
+          workerOffers.length
         )
       ).catch(() => {});
 

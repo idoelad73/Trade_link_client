@@ -7,6 +7,7 @@ export default function StripePaymentModal({
   orderId,
   onClose,
   onSuccess,
+  isDeposit = false,
 }) {
   const mountRef    = useRef(null);
   const stripeRef   = useRef(null);
@@ -51,11 +52,13 @@ export default function StripePaymentModal({
     setSubmitting(true);
     setErrorMsg('');
 
+    const returnUrl = isDeposit
+      ? `${window.location.origin}/dashboard/contractor?deposit=${orderId}&status=held`
+      : `${window.location.origin}/dashboard/contractor/payments?order=${orderId}&status=paid`;
+
     const { error } = await stripeRef.current.confirmPayment({
       elements: elementsRef.current,
-      confirmParams: {
-        return_url: `${window.location.origin}/dashboard/contractor/payments?order=${orderId}&status=paid`,
-      },
+      confirmParams: { return_url: returnUrl },
       redirect: 'if_required',
     });
 
@@ -117,11 +120,17 @@ export default function StripePaymentModal({
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 text-white font-extrabold text-sm shadow-md shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+              className={`w-full py-2.5 rounded-xl disabled:opacity-50 text-white font-extrabold text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                isDeposit
+                  ? 'bg-gradient-to-r from-violet-600 to-indigo-500 hover:from-violet-500 hover:to-indigo-400 shadow-violet-200'
+                  : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 shadow-emerald-200'
+              }`}
             >
               {submitting
                 ? <><span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Processing…</>
-                : `Pay $${amount?.toFixed(2)}`}
+                : isDeposit
+                  ? `🔒 Authorize Hold $${amount?.toFixed(2)}`
+                  : `Pay $${amount?.toFixed(2)}`}
             </button>
           )}
 

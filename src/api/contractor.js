@@ -35,10 +35,14 @@ export const askAvailability = (tradeId, date, siteName, siteAddress, lang, site
 export const getWorkersLeft = (siteId, tradeName, date) =>
   api.get(`/contractor/sites/${siteId}/workers-left`, { params: { tradeName, date } }).then(r => r.data);
 
+export const getSiteDepositSummary = (siteId) =>
+  api.get(`/contractor/sites/${siteId}/deposit-summary`).then(r => r.data);
+
 // Applications (trade pros who applied to contractor sites)
 export const getApplications      = () => api.get('/contractor/applications').then(r => r.data);
 export const approveApplication        = (id, scheduledDate) => api.patch(`/contractor/applications/${id}/approve`, { scheduledDate }).then(r => r.data);
 export const approveAvailabilityRequest = (id) => api.patch(`/contractor/messages/${id}/approve-availability`).then(r => r.data);
+export const approveWorkerOffer        = (id) => api.patch(`/contractor/messages/${id}/approve-worker-offer`).then(r => r.data);
 export const approveReschedule         = (id) => api.patch(`/contractor/messages/${id}/approve-reschedule`).then(r => r.data);
 export const declineReschedule         = (id) => api.patch(`/contractor/messages/${id}/decline-reschedule`).then(r => r.data);
 export const getWorkPlan        = (siteId) => api.get(`/contractor/sites/${siteId}/work-plan`).then(r => r.data);
