@@ -286,7 +286,7 @@ export default function TradeSearchResultsPage() {
           tradeName={calendarPro.tradeName ?? ''}
           workersNo={calendarPro.workersNo ?? 0}
           mySiteNames={mySiteNames}
-          onClose={() => { setCalendarPro(null); getWorkersLeft(siteId, trade, requiredDate).then(setSlotsInfo).catch(() => {}); }}
+          onClose={() => { setCalendarPro(null); if (requiredDate) getWorkersLeft(siteId, trade, requiredDate).then(setSlotsInfo).catch(() => {}); }}
         />
       )}
     </div>

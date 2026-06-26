@@ -324,10 +324,19 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                         onClick={async () => {
                           setApprovingOffer(offer._id);
                           try {
-                            await approveWorkerOffer(offer._id);
+                            const result = await approveWorkerOffer(offer._id);
                             setWorkerOffers((prev) => prev.filter((o) => o._id !== offer._id));
                             toast.success(`✅ ${offer.tradePro?.fullName} — ${offer.workersOffered} worker${offer.workersOffered !== 1 ? 's' : ''} confirmed`);
                             onApproved?.();
+                            // If all slots are now filled, trigger the deposit flow
+                            if (result?.slotsRemaining === 0 && result?.siteId) {
+                              try {
+                                const summary = await getSiteDepositSummary(result.siteId);
+                                if (summary.total > 0) {
+                                  setDepositData({ siteId: result.siteId, ...summary });
+                                }
+                              } catch (_) {}
+                            }
                           } catch (err) {
                             toast.error('Failed to approve. Please try again.');
                           } finally {

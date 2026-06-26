@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades } from '../../api/contractor.js';
+import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades, getSiteDepositSummary } from '../../api/contractor.js';
 import ContractorInfoModal from '../../components/contractor/ContractorInfoModal.jsx';
 import AddSiteModal from '../../components/contractor/AddSiteModal.jsx';
 import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx';
 import UpdateSitePhotoModal from '../../components/contractor/UpdateSitePhotoModal.jsx';
 import ContractorApplicationsModal from '../../components/contractor/ContractorApplicationsModal.jsx';
+import DepositSummaryModal from '../../components/contractor/DepositSummaryModal.jsx';
 import TradeGradesListModal from '../../components/contractor/TradeGradesListModal.jsx';
 
 const content = {
@@ -269,11 +270,22 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
                   <button
                     key={tr.name}
                     type="button"
-                    disabled={isFull}
-                    onClick={() => !isFull && onSelectTrade(site._id, isSelected ? null : tr.name)}
+                    onClick={() => {
+                      if (isFull) {
+                        console.log('[deposit-click] trade card clicked, siteId=', site._id);
+                        getSiteDepositSummary(site._id)
+                          .then((summary) => {
+                            console.log('[deposit-click] summary:', summary);
+                            if (summary.total > 0) setDepositData({ siteId: site._id, ...summary });
+                          })
+                          .catch((err) => console.error('[deposit-click] error:', err));
+                      } else {
+                        onSelectTrade(site._id, isSelected ? null : tr.name);
+                      }
+                    }}
                     className={`flex flex-col items-start gap-1 px-2.5 py-2 rounded-xl border-2 text-xs font-semibold transition-all duration-150 active:scale-95 ${
                       isFull
-                        ? 'bg-orange-400 border-orange-400 text-white shadow shadow-orange-100 cursor-not-allowed'
+                        ? 'bg-orange-400 border-orange-400 text-white shadow shadow-orange-100 hover:bg-orange-500 cursor-pointer'
                         : isSelected
                           ? 'bg-orange-500 border-orange-500 text-white shadow shadow-orange-200'
                           : isAssigned
@@ -283,7 +295,7 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
                   >
                     {/* Row 1: name */}
                     <span className="flex items-center gap-1 leading-none">
-                      {isFull     && <span className="text-[10px]">✓</span>}
+                      {isFull     && <span className="text-[10px]">🔒</span>}
                       {isAssigned && !isFull && <span className="text-[10px]">⚡</span>}
                       {tr.name}
                     </span>
@@ -497,6 +509,7 @@ export default function ContractorDashboard() {
   const [selection,            setSelection]            = useState(null);
   const [applicationsOpen,     setApplicationsOpen]     = useState(false);
   const [applicationsCount,    setApplicationsCount]    = useState(0);
+  const [depositData,          setDepositData]          = useState(null); // { siteId, siteName, rows, total }
   const [pendingPayments,      setPendingPayments]      = useState(0);
   const [gradableTrades,       setGradableTrades]       = useState(null); // null = not loaded yet
   const [gradeLoading,         setGradeLoading]         = useState(false);
@@ -516,15 +529,35 @@ export default function ContractorDashboard() {
       .then((n) => setPendingPayments(n))
       .catch(() => {});
 
+  const checkAndShowDeposit = (normalized) => {
+    console.log('[deposit-check] checking', normalized.length, 'sites for workers_no===0');
+    const site = normalized.find((s) => s.tradesNeeded?.some((t) => t.workers_no === 0));
+    console.log('[deposit-check] site needing deposit:', site?._id, site?.name ?? 'none');
+    if (!site) return;
+    getSiteDepositSummary(site._id)
+      .then((summary) => {
+        console.log('[deposit-check] summary:', JSON.stringify(summary));
+        if (summary.total > 0) {
+          console.log('[deposit-check] ✅ showing modal, total=$' + summary.total);
+          setDepositData({ siteId: site._id, ...summary });
+        } else {
+          console.log('[deposit-check] ❌ total=0 or alreadyPaid, modal skipped');
+        }
+      })
+      .catch((err) => console.error('[deposit-check] error:', err));
+  };
+
   const refreshSites = () =>
-    getSites().then((loaded) =>
-      setSites(loaded.map((s) => ({
+    getSites().then((loaded) => {
+      const normalized = loaded.map((s) => ({
         ...s,
         tradesNeeded: (s.tradesNeeded || []).map((t) =>
           typeof t === 'string' ? { name: t, assigned: false } : t
         ),
-      })))
-    ).catch(console.error);
+      }));
+      setSites(normalized);
+      checkAndShowDeposit(normalized);
+    }).catch(console.error);
 
   const handleSelectTrade = (siteId, trade) => {
     setSelection(trade ? { siteId, trade } : null);
@@ -563,13 +596,15 @@ export default function ContractorDashboard() {
       setSitesLoading(true);
       getSites()
         .then((loaded) => {
-          // Normalize tradesNeeded — handle old string[] format from DB
-          setSites(loaded.map((s) => ({
+          const normalized = loaded.map((s) => ({
             ...s,
             tradesNeeded: (s.tradesNeeded || []).map((t) =>
               typeof t === 'string' ? { name: t, assigned: false } : t
             ),
-          })));
+          }));
+          setSites(normalized);
+
+          checkAndShowDeposit(normalized);
         })
         .catch(console.error)
         .finally(() => setSitesLoading(false));
@@ -801,6 +836,17 @@ export default function ContractorDashboard() {
         <ContractorApplicationsModal
           onClose={() => setApplicationsOpen(false)}
           onApproved={() => { refreshApplicationCount(); refreshSites(); }}
+        />
+      )}
+
+      {depositData && (
+        <DepositSummaryModal
+          siteId={depositData.siteId}
+          siteName={depositData.siteName}
+          rows={depositData.rows}
+          total={depositData.total}
+          onClose={() => setDepositData(null)}
+          onSuccess={() => { setDepositData(null); refreshSites(); }}
         />
       )}
 
