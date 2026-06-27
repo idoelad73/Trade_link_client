@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { getApplications, approveApplication, approveWorkerOffer, approveReschedule, declineReschedule, getSiteDepositSummary } from '../../api/contractor.js';
+import { getApplications, approveApplication, approveWorkerOffer, approveReschedule, declineReschedule } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
 import { toast } from '../../utils/toast.js';
-import DepositSummaryModal from './DepositSummaryModal.jsx';
 
 const content = {
   en: {
@@ -52,7 +51,6 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
   const [approving,        setApproving]        = useState(null);
   const [approvingOffer,   setApprovingOffer]   = useState(null);
   const [actingReschedule, setActingReschedule] = useState(null);
-  const [depositData,      setDepositData]      = useState(null);
 
   useEffect(() => {
     getApplications()
@@ -87,13 +85,6 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
       );
       toast.success(t.approvedToast(app.tradePro?.fullName ?? ''));
       onApproved?.();
-
-      if (slotsRemaining === 0 && siteId) {
-        try {
-          const summary = await getSiteDepositSummary(siteId);
-          if (summary.total > 0) setDepositData({ siteId, ...summary });
-        } catch { /* non-blocking */ }
-      }
     } catch (err) {
       if (err?.response?.status === 409 && err.response.data?.alreadyAssigned) {
         toast.error(t.alreadyAssigned, { duration: 4000 });
@@ -325,18 +316,10 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                           setApprovingOffer(offer._id);
                           try {
                             const result = await approveWorkerOffer(offer._id);
+                            console.log('[approveWorkerOffer] response:', result);
                             setWorkerOffers((prev) => prev.filter((o) => o._id !== offer._id));
                             toast.success(`✅ ${offer.tradePro?.fullName} — ${offer.workersOffered} worker${offer.workersOffered !== 1 ? 's' : ''} confirmed`);
                             onApproved?.();
-                            // If all slots are now filled, trigger the deposit flow
-                            if (result?.slotsRemaining === 0 && result?.siteId) {
-                              try {
-                                const summary = await getSiteDepositSummary(result.siteId);
-                                if (summary.total > 0) {
-                                  setDepositData({ siteId: result.siteId, ...summary });
-                                }
-                              } catch (_) {}
-                            }
                           } catch (err) {
                             toast.error('Failed to approve. Please try again.');
                           } finally {
@@ -440,16 +423,6 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
       </div>
     </div>
 
-    {depositData && (
-      <DepositSummaryModal
-        siteId={depositData.siteId}
-        siteName={depositData.siteName}
-        rows={depositData.rows}
-        total={depositData.total}
-        onClose={() => setDepositData(null)}
-        onSuccess={() => { setDepositData(null); toast.success('✅ Deposit authorized successfully!'); }}
-      />
-    )}
     </>
   );
 }

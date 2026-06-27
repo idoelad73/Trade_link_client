@@ -38,6 +38,9 @@ export const getWorkersLeft = (siteId, tradeName, date) =>
 export const getSiteDepositSummary = (siteId) =>
   api.get(`/contractor/sites/${siteId}/deposit-summary`).then(r => r.data);
 
+export const confirmDeposit = (siteId, paymentIntentId) =>
+  api.post('/contractor/deposit-confirmed', { siteId, paymentIntentId }).then(r => r.data);
+
 // Applications (trade pros who applied to contractor sites)
 export const getApplications      = () => api.get('/contractor/applications').then(r => r.data);
 export const approveApplication        = (id, scheduledDate) => api.patch(`/contractor/applications/${id}/approve`, { scheduledDate }).then(r => r.data);
@@ -56,7 +59,9 @@ export const deleteWorkPlanTrade = (siteId, tradeName) => api.delete(`/contracto
 export const getPaymentApprovalsCount  = ()               => api.get('/contractor/payment-approvals/count').then(r => r.data.pendingCount);
 export const getPaymentApprovals       = ()               => api.get('/contractor/payment-approvals').then(r => r.data.orders);
 // Returns { deleted: true, _id } on rejection OR { order } on approval
-export const updatePaymentApproval = (orderId, status) => api.patch(`/contractor/payment-approvals/${orderId}`, { status }).then(r => r.data);
+// Returns 402 { needsOverage, overageAmount, clientSecret, piId } if hours exceed deposit
+export const updatePaymentApproval = (orderId, status, overagePiId = null) =>
+  api.patch(`/contractor/payment-approvals/${orderId}`, { status, ...(overagePiId ? { overagePiId } : {}) }).then(r => r.data);
 
 
 // Trade grading

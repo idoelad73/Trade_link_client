@@ -260,17 +260,19 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
             </p>
             <div className="flex flex-wrap gap-2">
               {site.tradesNeeded.map((tr) => {
-                const isSelected   = selectedTrade === tr.name;
-                const isAssigned   = tr.assigned;
-                // isFull = no remaining worker slots → orange + locked
-                const hasWorkers   = tr.workers_no !== null && tr.workers_no !== undefined;
-                const isFull       = hasWorkers ? tr.workers_no <= 0 : isAssigned;
-                const dateLabel    = fmtDate(tr.requiredDate);
+                console.log(`[trade-card] site="${site.name}" trade="${tr.name}" requiredDate="${tr.requiredDate}" workers_no=${tr.workers_no}`);
+                const isSelected    = selectedTrade === tr.name;
+                const isAssigned    = tr.assigned;
+                const hasWorkers    = tr.workers_no !== null && tr.workers_no !== undefined;
+                const isFull        = hasWorkers ? tr.workers_no <= 0 : isAssigned;
+                const isDepositHeld = tr.depositHeld === true;
+                const dateLabel     = fmtDate(tr.requiredDate);
                 return (
                   <button
                     key={tr.name}
                     type="button"
                     onClick={() => {
+                      if (isDepositHeld) return; // deposit done, no action
                       if (isFull) {
                         console.log('[deposit-click] trade card clicked, siteId=', site._id);
                         getSiteDepositSummary(site._id)
@@ -284,21 +286,36 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
                       }
                     }}
                     className={`flex flex-col items-start gap-1 px-2.5 py-2 rounded-xl border-2 text-xs font-semibold transition-all duration-150 active:scale-95 ${
-                      isFull
-                        ? 'bg-orange-400 border-orange-400 text-white shadow shadow-orange-100 hover:bg-orange-500 cursor-pointer'
-                        : isSelected
-                          ? 'bg-orange-500 border-orange-500 text-white shadow shadow-orange-200'
-                          : isAssigned
-                            ? 'bg-amber-50 border-amber-300 text-amber-800 hover:border-amber-400 hover:bg-amber-100'
-                            : 'bg-white border-amber-200 text-amber-700 hover:border-orange-300 hover:bg-orange-50'
+                      isDepositHeld
+                        ? 'bg-emerald-500 border-emerald-500 text-white shadow shadow-emerald-100 cursor-default'
+                        : isFull
+                          ? 'bg-orange-400 border-orange-400 text-white shadow shadow-orange-100 hover:bg-orange-500 cursor-pointer'
+                          : isSelected
+                            ? 'bg-orange-500 border-orange-500 text-white shadow shadow-orange-200'
+                            : isAssigned
+                              ? 'bg-amber-50 border-amber-300 text-amber-800 hover:border-amber-400 hover:bg-amber-100'
+                              : 'bg-white border-amber-200 text-amber-700 hover:border-orange-300 hover:bg-orange-50'
                     }`}
                   >
                     {/* Row 1: name */}
                     <span className="flex items-center gap-1 leading-none">
-                      {isFull     && <span className="text-[10px]">🔒</span>}
-                      {isAssigned && !isFull && <span className="text-[10px]">⚡</span>}
+                      {isDepositHeld && <span className="text-[10px]">✅</span>}
+                      {!isDepositHeld && isFull     && <span className="text-[10px]">🔒</span>}
+                      {!isDepositHeld && isAssigned && !isFull && <span className="text-[10px]">⚡</span>}
                       {tr.name}
                     </span>
+                    {isDepositHeld && (
+                      <span className="flex items-center gap-1 flex-wrap">
+                        <span className="text-[10px] font-bold text-white/90 bg-white/20 px-1.5 py-0.5 rounded-md leading-none">
+                          Deposit held
+                        </span>
+                        {tr.depositAmount != null && (
+                          <span className="text-[10px] font-extrabold text-white bg-white/25 px-1.5 py-0.5 rounded-md leading-none">
+                            ${tr.depositAmount}
+                          </span>
+                        )}
+                      </span>
+                    )}
                     {/* Row 2: budget + date + workers badges */}
                     <span className="flex items-center gap-1 flex-wrap">
                         {tr.budgetType === 'amount' && tr.maxAmount && (
@@ -531,7 +548,10 @@ export default function ContractorDashboard() {
 
   const checkAndShowDeposit = (normalized) => {
     console.log('[deposit-check] checking', normalized.length, 'sites for workers_no===0');
-    const site = normalized.find((s) => s.tradesNeeded?.some((t) => t.workers_no === 0));
+    // Only trigger if no trade on this site has a deposit already held
+    const site = normalized.find((s) =>
+      s.tradesNeeded?.some((t) => t.workers_no === 0 && !t.depositHeld)
+    );
     console.log('[deposit-check] site needing deposit:', site?._id, site?.name ?? 'none');
     if (!site) return;
     getSiteDepositSummary(site._id)
@@ -555,6 +575,12 @@ export default function ContractorDashboard() {
           typeof t === 'string' ? { name: t, assigned: false } : t
         ),
       }));
+      console.log('[refreshSites] sites after reload:',
+        normalized.map(s => ({
+          name: s.name,
+          trades: s.tradesNeeded.map(t => ({ name: t.name, requiredDate: t.requiredDate, workers_no: t.workers_no })),
+        }))
+      );
       setSites(normalized);
       checkAndShowDeposit(normalized);
     }).catch(console.error);
@@ -845,8 +871,12 @@ export default function ContractorDashboard() {
           siteName={depositData.siteName}
           rows={depositData.rows}
           total={depositData.total}
-          onClose={() => setDepositData(null)}
-          onSuccess={() => { setDepositData(null); refreshSites(); }}
+          onClose={() => { console.log('[deposit-modal] closed (cancel)'); setDepositData(null); }}
+          onSuccess={() => {
+            console.log('[deposit-modal] onSuccess fired — clearing modal and refreshing sites');
+            setDepositData(null);
+            refreshSites().then(() => console.log('[deposit-modal] refreshSites done — trade card should now be green'));
+          }}
         />
       )}
 

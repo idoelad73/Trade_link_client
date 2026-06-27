@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { confirmDeposit } from '../../api/contractor.js';
 
 export default function StripePaymentModal({
   clientSecret,
@@ -56,17 +57,31 @@ export default function StripePaymentModal({
       ? `${window.location.origin}/dashboard/contractor?deposit=${orderId}&status=held`
       : `${window.location.origin}/dashboard/contractor/payments?order=${orderId}&status=paid`;
 
-    const { error } = await stripeRef.current.confirmPayment({
+    console.log(`[stripe-modal] confirmPayment — isDeposit=${isDeposit} orderId=${orderId} amount=${amount}`);
+
+    const { error, paymentIntent } = await stripeRef.current.confirmPayment({
       elements: elementsRef.current,
       confirmParams: { return_url: returnUrl },
       redirect: 'if_required',
     });
 
     if (error) {
+      console.error('[stripe-modal] confirmPayment error:', error.type, error.message);
       setErrorMsg(error.message ?? 'Payment failed. Please try again.');
       setSubmitting(false);
     } else {
-      onSuccess?.();
+      console.log('[stripe-modal] confirmPayment success — PI status:', paymentIntent?.status, 'id:', paymentIntent?.id);
+      if (isDeposit && paymentIntent?.id) {
+        try {
+          console.log('[stripe-modal] calling confirmDeposit — siteId(orderId):', orderId, 'piId:', paymentIntent.id);
+          const result = await confirmDeposit(orderId, paymentIntent.id);
+          console.log('[stripe-modal] ✅ confirmDeposit OK — messageId:', result.messageId, '→ onSuccess will refresh trade card');
+        } catch (err) {
+          console.error('[stripe-modal] ❌ confirmDeposit error:', err?.response?.data ?? err.message);
+        }
+      }
+      console.log('[stripe-modal] calling onSuccess — dashboard should refresh and turn trade card green');
+      onSuccess?.(paymentIntent);
       onClose?.();
     }
   };

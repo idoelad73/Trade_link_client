@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import useUIStore from '../../stores/uiStore.js';
 import { getPaymentApprovals, updatePaymentApproval } from '../../api/contractor.js';
-import { createPaymentIntent } from '../../api/stripe.js';
-import StripePaymentModal from '../../components/contractor/StripePaymentModal.jsx';
 import { toast } from '../../utils/toast.js';
+import StripePaymentModal from '../../components/contractor/StripePaymentModal.jsx';
 
 // ── i18n ──────────────────────────────────────────────────────────────────────
 const content = {
@@ -26,7 +25,7 @@ const content = {
     // SweetAlert2 confirm modal
     confirmTitle:  (name, profession) => `Approve order for ${name}?`,
     confirmText:   (profession, sum) => `${profession} · Total: $${sum}`,
-    confirmYes:    '✅ Yes, Approve & Pay',
+    confirmYes:    '✅ Yes, Approve & Release',
     confirmNo:     'Cancel',
     piError:       'Could not start payment. Please try again.',
     paySuccess:    'Payment completed successfully! 🎉',
@@ -47,7 +46,7 @@ const content = {
     pending0:   'Sin aprobaciones pendientes',
     confirmTitle:  (name) => `¿Aprobar orden para ${name}?`,
     confirmText:   (profession, sum) => `${profession} · Total: $${sum}`,
-    confirmYes:    '✅ Sí, Aprobar y Pagar',
+    confirmYes:    '✅ Sí, Aprobar y Liberar',
     confirmNo:     'Cancelar',
     piError:       'No se pudo iniciar el pago. Inténtalo de nuevo.',
     paySuccess:    '¡Pago completado con éxito! 🎉',
@@ -70,7 +69,7 @@ function StatusBadge({ status, t }) {
 }
 
 // ── Single order row ──────────────────────────────────────────────────────────
-function OrderRow({ order, t, onApprove, onReject }) {
+function OrderRow({ order, t, onApprove, onReject, approving }) {
   const [loading, setLoading] = useState(false);
 
   const handleReject = async () => {
@@ -153,13 +152,15 @@ function OrderRow({ order, t, onApprove, onReject }) {
 
         {canAct ? (
           <>
-            {/* Approve → SweetAlert2 → Stripe modal */}
             <button
               onClick={() => onApprove(order)}
-              disabled={loading}
+              disabled={loading || approving}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white text-xs font-bold shadow shadow-emerald-200 transition-all active:scale-95"
             >
-              ✅ {t.btn.approve}
+              {approving
+                ? <span className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                : '✅'}
+              {t.btn.approve}
             </button>
             <button
               onClick={handleReject}
@@ -189,9 +190,8 @@ export default function PaymentApprovalsPage() {
   const [error,     setError]     = useState('');
   const [tab,       setTab]       = useState('all');
 
-  // ── Stripe modal state ────────────────────────────────────────────────────
-  const [stripeModal, setStripeModal] = useState(null);
-  // stripeModal = { clientSecret, amount, tradeName, orderId } | null
+  const [approving,    setApproving]    = useState(null);  // orderId being approved
+  const [overageModal, setOverageModal] = useState(null);  // { clientSecret, overageAmount, piId, order }
 
   const load = async () => {
     setLoading(true);
@@ -214,11 +214,11 @@ export default function PaymentApprovalsPage() {
     setOrders((prev) => prev.filter((o) => o._id !== orderId));
   };
 
-  // ── Approve → SweetAlert2 confirm → createPaymentIntent → StripeModal ─────
+  // ── Approve → SweetAlert2 confirm → server captures deposit + transfers ─────
   const handleApprove = async (order) => {
     const pro = order.trade_id;
 
-    const workers   = order.workers_no ?? 1;
+    const workers       = order.workers_no ?? 1;
     const breakdownLine = order.hourly_rate > 0
       ? (workers > 1
           ? `${workers} workers × ${order.actual_hours}h × $${order.hourly_rate}/hr`
@@ -237,8 +237,9 @@ export default function PaymentApprovalsPage() {
         <p style="font-size:11px;color:#64748b;margin-top:4px;font-weight:600;">
           ${breakdownLine}
         </p>
-        <p style="font-size:11px;color:#94a3b8;margin-top:2px;">
-          ${order.date}
+        <p style="font-size:11px;color:#94a3b8;margin-top:2px;">${order.date}</p>
+        <p style="font-size:11px;color:#7c3aed;margin-top:6px;font-weight:600;">
+          💳 Charged from deposit hold (extra card required if total exceeds deposit)
         </p>
       `,
       icon:               'question',
@@ -257,49 +258,38 @@ export default function PaymentApprovalsPage() {
 
     if (!isConfirmed) return;
 
-    // First: approve the order in our DB — this creates the WorkHoursOrder
-    // and returns { deleted, _id (message), order: WorkHoursOrder }
-    let approveResult;
+    setApproving(order._id);
     try {
-      approveResult = await updatePaymentApproval(order._id, 'approved');
+      await updatePaymentApproval(order._id, 'approved');
+      setOrders((prev) => prev.filter((o) => o._id !== order._id));
+      toast.success(t.paySuccess, { duration: 5000 });
     } catch (err) {
+      // 402 = hours exceeded deposit → need extra payment from contractor
+      if (err.response?.status === 402 && err.response.data?.needsOverage) {
+        const { clientSecret, overageAmount, piId } = err.response.data;
+        setOverageModal({ clientSecret, overageAmount, piId, order });
+        return;
+      }
       toast.error(t.piError);
-      return;
+    } finally {
+      setApproving(null);
     }
-
-    // Remove from list optimistically (it's no longer pending)
-    setOrders((prev) => prev.filter((o) => o._id !== order._id));
-
-    // WorkHoursOrder._id is what createPaymentIntent queries
-    const workHoursOrderId = approveResult?.order?._id;
-    if (!workHoursOrderId) {
-      toast.error(t.piError);
-      return;
-    }
-
-    // Then: create Stripe PaymentIntent server-side
-    let piData;
-    try {
-      piData = await createPaymentIntent(workHoursOrderId);
-    } catch (err) {
-      // Order is approved in DB — payment can be retried from history
-      toast.error(t.piError);
-      return;
-    }
-
-    // Open Stripe modal
-    setStripeModal({
-      clientSecret: piData.clientSecret,
-      amount:       piData.amount,
-      tradeName:    piData.tradeName,
-      orderId:      workHoursOrderId,
-    });
   };
 
-  // ── Payment success callback ──────────────────────────────────────────────
-  const handlePaySuccess = () => {
-    toast.success(t.paySuccess, { duration: 5000 });
-    setStripeModal(null);
+  // Called after contractor pays the overage via Stripe modal
+  const handleOverageSuccess = async (paymentIntent) => {
+    const { order } = overageModal;
+    setOverageModal(null);
+    setApproving(order._id);
+    try {
+      await updatePaymentApproval(order._id, 'approved', paymentIntent?.id);
+      setOrders((prev) => prev.filter((o) => o._id !== order._id));
+      toast.success(t.paySuccess, { duration: 5000 });
+    } catch (err) {
+      toast.error(t.piError);
+    } finally {
+      setApproving(null);
+    }
   };
 
   // ── Filter tabs ───────────────────────────────────────────────────────────
@@ -400,20 +390,22 @@ export default function PaymentApprovalsPage() {
             t={t}
             onApprove={handleApprove}
             onReject={handleReject}
+            approving={approving === order._id}
           />
         ))}
 
       </main>
 
-      {/* Stripe payment modal — rendered outside the list so it doesn't re-mount */}
-      {stripeModal && (
+      {/* Overage payment modal — shown when work hours exceed the held deposit */}
+      {overageModal && (
         <StripePaymentModal
-          clientSecret={stripeModal.clientSecret}
-          amount={stripeModal.amount}
-          tradeName={stripeModal.tradeName}
-          orderId={stripeModal.orderId}
-          onClose={() => setStripeModal(null)}
-          onSuccess={handlePaySuccess}
+          clientSecret={overageModal.clientSecret}
+          amount={overageModal.overageAmount}
+          tradeName={`Extra charge — ${overageModal.order.trade_id?.professionality ?? 'Trade'}`}
+          orderId={overageModal.order._id}
+          isDeposit={false}
+          onSuccess={handleOverageSuccess}
+          onClose={() => setOverageModal(null)}
         />
       )}
     </div>

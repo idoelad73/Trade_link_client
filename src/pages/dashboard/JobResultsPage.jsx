@@ -283,6 +283,11 @@ export default function JobResultsPage() {
                         📅 {te.requiredDate.split('-').reverse().slice(0, 2).reverse().join('/')}
                       </span>
                     )}
+                    {te?.depositHeld && (
+                      <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        ✅ Deposit held{te.depositAmount != null ? ` $${te.depositAmount}` : ''}
+                      </span>
+                    )}
                   </div>
 
                   {/* Date info + Apply */}
