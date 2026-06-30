@@ -65,5 +65,11 @@ export const updatePaymentApproval = (orderId, status, overagePiId = null) =>
 
 
 // Trade grading
-export const getGradableTrades = () => api.get('/contractor/trade-grades/eligible').then(r => r.data.trades);
-export const submitTradeGrade  = (trade_id, site_id, order_id, trade_grade) => api.post('/contractor/trade-grades', { trade_id, site_id, order_id, trade_grade }).then(r => r.data);
+export const getGradableTrades  = () => api.get('/contractor/trade-grades/eligible').then(r => r.data.trades);
+export const submitTradeGrade   = (trade_id, site_id, order_id, trade_grade, review_text, photos) =>
+  api.post('/contractor/trade-grades', { trade_id, site_id, order_id, trade_grade, review_text, photos }).then(r => r.data);
+export const uploadGradePhoto   = (file) => {
+  const fd = new FormData();
+  fd.append('photo', file);
+  return api.post('/contractor/trade-grades/photo', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data.url);
+};

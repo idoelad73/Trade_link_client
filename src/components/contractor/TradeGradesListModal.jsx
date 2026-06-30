@@ -12,8 +12,8 @@ export default function TradeGradesListModal({ trades: initialTrades, onClose })
   const [grading,  setGrading]  = useState(null);  // trade object being graded
   const [graded,   setGraded]   = useState({});     // { key: grade } submitted this session
 
-  async function handleSubmit(trade_id, site_id, order_id, grade) {
-    await submitTradeGrade(trade_id, site_id, order_id, grade);
+  async function handleSubmit(trade_id, site_id, order_id, grade, review_text, photos) {
+    await submitTradeGrade(trade_id, site_id, order_id, grade, review_text, photos);
     setGraded(prev => ({ ...prev, [order_id]: grade }));
     // Remove from the ungraded list
     setTrades(prev => prev.filter(t => String(t.order_id) !== String(order_id)));
