@@ -330,20 +330,12 @@ export default function WorkingHoursModal({
               </div>
             )}
 
-            {/* Workers × rate line */}
-            {hourlyRate && workers > 1 && (
-              <div className="text-[11px] font-semibold text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
-                👷 {workers} workers × ${hourlyRate}/hr
-                <span className="text-slate-400 ml-1">= <span className="font-bold text-slate-700">${effectiveRate?.toFixed(2)}/hr</span></span>
-              </div>
-            )}
-
-            {/* Total cost */}
+            {/* Total cost — always shows workers × hours × rate */}
             {hasTime && orderSum !== null && (
               <div className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
                 💰 <span className="font-extrabold">${orderSum}</span>
                 <span className="text-emerald-500 font-normal ml-1">
-                  ({hoursFloat}h × {workers > 1 ? `${workers} × ` : ''}${hourlyRate}/hr)
+                  ({workers}w × {hoursFloat}h × ${hourlyRate}/hr)
                 </span>
               </div>
             )}

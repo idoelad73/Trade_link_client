@@ -216,7 +216,12 @@ export default function WorkPlanPage() {
                     <div className="flex flex-wrap gap-2">
                       <span className="text-sm font-semibold text-slate-700">👤 {row.tradeName}</span>
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-lg border ${row.date !== '—' ? 'bg-sky-50 text-sky-700 border-sky-200' : 'text-slate-300 border-dashed border-slate-200'}`}>📅 {row.date !== '—' ? row.date : '—'}</span>
-                      {row.budget !== '—' && <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">💰 {row.budget}</span>}
+                      {row.budgetTotal != null
+                        ? <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">💰 ${row.budgetTotal.toFixed(2)} <span className="font-normal opacity-70">({row.workers_no}w×{row.totalHours}h×${row.hourlyRate})</span></span>
+                        : row.totalHours
+                          ? <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-slate-50 text-slate-500 border border-slate-200">⏱ {row.totalHours}h</span>
+                          : null
+                      }
                     </div>
                   </div>
 
@@ -247,14 +252,19 @@ export default function WorkPlanPage() {
                       📅 {row.date !== '—' ? row.date : '—'}
                     </span>
 
-                    {/* Budget */}
-                    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg border ${
-                      row.budget !== '—'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'text-slate-300 border-dashed border-slate-200'
-                    }`}>
-                      {row.budget !== '—' ? `💰 ${row.budget}` : '—'}
-                    </span>
+                    {/* Budget — workers_no × totalHours × hourlyRate */}
+                    {row.budgetTotal != null ? (
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-extrabold text-emerald-600">${row.budgetTotal.toFixed(2)}</span>
+                        <span className="text-[10px] text-slate-400 leading-tight">{row.workers_no}w × {row.totalHours}h × ${row.hourlyRate}/hr</span>
+                      </div>
+                    ) : row.totalHours ? (
+                      <span className="inline-flex items-center text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-50 text-slate-500 border border-slate-200">
+                        ⏱ {row.totalHours}h
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
 
                     {/* Chat icon */}
                     <button
