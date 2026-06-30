@@ -250,6 +250,18 @@ export default function JobResultsPage() {
                     {job.contractorName && (
                       <span className="text-xs font-semibold text-slate-500">🏗️ {job.contractorName}</span>
                     )}
+                    {job.contractorId && job.contractorAvgGrade != null && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/dashboard/trade/contractor-reviews/${job.contractorId}`)}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 hover:bg-amber-100 transition active:scale-95 focus:outline-none"
+                        title="View contractor reviews"
+                      >
+                        <span className="text-amber-400 text-xs leading-none">★</span>
+                        <span className="text-xs font-extrabold text-amber-700">{job.contractorAvgGrade.toFixed(1)}</span>
+                        <span className="text-[10px] text-slate-400">({job.contractorGradeCount})</span>
+                      </button>
+                    )}
                     {/* Workers badge — always show when workers_no is set */}
                     {te?.workers_no > 0 && (
                       <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200">

@@ -194,6 +194,7 @@ export default function LoginModal() {
                 </label>
                 <button
                   type="button"
+                  onClick={() => { closeModal(); navigate('/forgot-password'); }}
                   className={`text-xs ${linkClr} font-medium hover:underline`}
                 >
                   {t.forgot}

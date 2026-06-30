@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getMe, updateLocation, getPaymentApprovedCount, getApprovedOrderDates } from '../../api/trade.js';
+import { getMe, updateLocation, getPaymentApprovedCount, getApprovedOrderDates, getGradableContractors } from '../../api/trade.js';
 import { completeOnboarding, startOnboarding } from '../../api/tradeStripe.js';
 import { toast } from '../../utils/toast.js';
 import TradeInfoModal from '../../components/trade/TradeInfoModal.jsx';
 import TradeSchedule from '../../components/trade/TradeSchedule.jsx';
 import AvailabilityMessagesModal from '../../components/trade/AvailabilityMessagesModal.jsx';
+import ContractorGradesListModal from '../../components/trade/ContractorGradesListModal.jsx';
 
 const content = {
   en: {
@@ -50,12 +51,18 @@ export default function TradeDashboard() {
   const [paymentCount,        setPaymentCount]        = useState(0);
   // approvedOrders: [{ date, siteId }] — used to colour calendar light-blue + disable clock
   const [approvedOrders, setApprovedOrders] = useState([]);
+  const [gradeOpen,       setGradeOpen]       = useState(false);
+  const [gradableContractors, setGradableContractors] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     getMe().then(setTradeData).catch(console.error).finally(() => setDataLoading(false));
     getPaymentApprovedCount().then(setPaymentCount).catch(() => {});
     getApprovedOrderDates().then(setApprovedOrders).catch(() => {});
+    getGradableContractors().then(list => {
+      setGradableContractors(list);
+      if (list.length > 0) setGradeOpen(true); // auto-open on login if there are ungraded contractors
+    }).catch(() => {});
 
     // Re-fetch bookings when the trade pro returns to this tab
     // (contractor may have approved while the tab was in the background)
@@ -198,6 +205,26 @@ export default function TradeDashboard() {
               )}
             </button>
 
+            {/* ⭐ Rate contractors button */}
+            <button
+              onClick={async () => {
+                try {
+                  const fresh = await getGradableContractors();
+                  setGradableContractors(fresh);
+                  if (fresh.length > 0) setGradeOpen(true);
+                } catch {}
+              }}
+              className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-amber-50 hover:bg-amber-100 transition active:scale-95 flex-shrink-0"
+              title="Rate Contractors"
+            >
+              <span className="text-xl leading-none select-none">⭐</span>
+              {gradableContractors.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow border-2 border-white leading-none">
+                  {gradableContractors.length > 99 ? '99+' : gradableContractors.length}
+                </span>
+              )}
+            </button>
+
             <button
               onClick={() => { clearAuth(); navigate('/'); }}
               className="flex items-center gap-1 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 px-2 sm:px-3 py-2 rounded-xl transition"
@@ -234,6 +261,18 @@ export default function TradeDashboard() {
       </main>
 
       {modalOpen      && <TradeInfoModal onClose={() => setModalOpen(false)} />}
+      {gradeOpen && (
+        <ContractorGradesListModal
+          contractors={gradableContractors}
+          onClose={() => {
+            setGradeOpen(false);
+            // Re-fetch so badge reflects any grades just submitted
+            getGradableContractors()
+              .then(setGradableContractors)
+              .catch(() => {});
+          }}
+        />
+      )}
       {messagesOpen   && (
         <AvailabilityMessagesModal
           onClose={() => {

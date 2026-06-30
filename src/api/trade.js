@@ -18,3 +18,16 @@ export const submitWorkLog           = (payload)  => api.post('/trade/work-log',
 export const getPaymentApprovedCount = ()  => api.get('/trade/payment-approved/count').then(r => r.data.count);
 // Returns { orders: [...approved], rejected: [...rejectedNotices] }
 export const getPaymentApproved      = ()  => api.get('/trade/payment-approved').then(r => r.data);
+
+// Contractor grading
+export const getGradableContractors     = () => api.get('/trade/contractor-grades/eligible').then(r => r.data.contractors);
+export const submitContractorGrade      = (contractor_id, site_id, order_id, trade_grade, review_text, photos) =>
+  api.post('/trade/contractor-grades', { contractor_id, site_id, order_id, trade_grade, review_text, photos }).then(r => r.data);
+export const uploadContractorGradePhoto = (file) => {
+  const fd = new FormData();
+  fd.append('photo', file);
+  return api.post('/trade/contractor-grades/photo', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data.url);
+};
+
+export const getContractorReviews = (contractorId) =>
+  api.get(`/trade/contractor-grades/${contractorId}/reviews`).then(r => r.data);

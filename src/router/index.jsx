@@ -26,8 +26,12 @@ import JobResultsPage from '../pages/dashboard/JobResultsPage';
 import TradeSearchResultsPage from '../pages/dashboard/TradeSearchResultsPage';
 import PaymentApprovalsPage from '../pages/dashboard/PaymentApprovalsPage';
 import TradePaymentApprovedPage from '../pages/dashboard/TradePaymentApprovedPage';
+import TradeReviewsPage from '../pages/dashboard/TradeReviewsPage';
+import ContractorReviewsPage from '../pages/dashboard/ContractorReviewsPage';
 import ProjectsShowcase from '../pages/ProjectsShowcase';
 import TradesShowcase from '../pages/TradesShowcase';
+import ForgotPasswordPage from '../pages/ForgotPasswordPage';
+import ResetPasswordPage from '../pages/ResetPasswordPage';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -39,15 +43,19 @@ const router = createBrowserRouter(
       <Route path="/trades"   element={<TradesShowcase />} />
       <Route path="/register/trade" element={<TradeRegister />} />
       <Route path="/register/contractor" element={<ContractorRegister />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password"  element={<ResetPasswordPage />} />
 
       {/* Dashboards */}
       <Route path="/dashboard/contractor"                   element={<ContractorDashboard />} />
       <Route path="/dashboard/contractor/work-plan/:siteId" element={<WorkPlanPage />} />
       <Route path="/dashboard/contractor/trade-search"        element={<TradeSearchResultsPage />} />
       <Route path="/dashboard/contractor/payment-approvals"  element={<PaymentApprovalsPage />} />
+      <Route path="/dashboard/contractor/trade-reviews/:tradeId" element={<TradeReviewsPage />} />
       <Route path="/dashboard/trade"                         element={<TradeDashboard />} />
       <Route path="/dashboard/trade/jobs"                  element={<JobResultsPage />} />
-      <Route path="/dashboard/trade/payment-approved"      element={<TradePaymentApprovedPage />} />
+      <Route path="/dashboard/trade/payment-approved"                    element={<TradePaymentApprovedPage />} />
+      <Route path="/dashboard/trade/contractor-reviews/:contractorId"   element={<ContractorReviewsPage />} />
 
       {/* Auth — uncomment when pages are built */}
       {/* <Route element={<AuthLayout />}>

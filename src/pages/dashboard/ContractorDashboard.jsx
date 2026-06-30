@@ -528,7 +528,8 @@ export default function ContractorDashboard() {
   const [applicationsCount,    setApplicationsCount]    = useState(0);
   const [depositData,          setDepositData]          = useState(null); // { siteId, siteName, rows, total }
   const [pendingPayments,      setPendingPayments]      = useState(0);
-  const [gradableTrades,       setGradableTrades]       = useState(null); // null = not loaded yet
+  const [gradableTrades,       setGradableTrades]       = useState(null); // null = modal closed
+  const [gradableTradesCount,  setGradableTradesCount]  = useState(0);    // for badge
   const [gradeLoading,         setGradeLoading]         = useState(false);
 
   const refreshApplicationCount = () =>
@@ -595,23 +596,27 @@ export default function ContractorDashboard() {
   useEffect(() => {
     refreshApplicationCount();
     refreshPaymentCount();
-    // Fetch gradable trades once on login — show modal if any need reviewing
+    // Fetch gradable trades once on login — show modal and badge if any need reviewing
     getGradableTrades()
-      .then(trades => { if (trades?.length) setGradableTrades(trades); })
+      .then(trades => {
+        const count = trades?.length ?? 0;
+        setGradableTradesCount(count);
+        if (count) setGradableTrades(trades);
+      })
       .catch(() => {});
   }, []);
 
   async function handleOpenGradeModal() {
-    if (gradableTrades !== null) {
-      // Already loaded — just show the modal (re-open after close)
-      return;
-    }
+    if (gradableTrades !== null) return; // modal already open
     setGradeLoading(true);
     try {
       const trades = await getGradableTrades();
-      setGradableTrades(trades?.length ? trades : []);
+      const count = trades?.length ?? 0;
+      setGradableTradesCount(count);
+      if (count) setGradableTrades(trades);
+      // count === 0: do nothing — don't open an empty modal
     } catch {
-      setGradableTrades([]);
+      // keep existing count; don't open modal
     } finally {
       setGradeLoading(false);
     }
@@ -739,6 +744,11 @@ export default function ContractorDashboard() {
                 <span className="block w-4 h-4 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
               ) : (
                 <span className="text-xl leading-none select-none">⭐</span>
+              )}
+              {gradableTradesCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow border-2 border-white leading-none">
+                  {gradableTradesCount > 99 ? '99+' : gradableTradesCount}
+                </span>
               )}
             </button>
 
@@ -884,7 +894,13 @@ export default function ContractorDashboard() {
       {gradableTrades && (
         <TradeGradesListModal
           trades={gradableTrades}
-          onClose={() => setGradableTrades(null)}
+          onClose={() => {
+            setGradableTrades(null);
+            // Re-fetch so badge reflects any grades just submitted
+            getGradableTrades()
+              .then(t => setGradableTradesCount(t?.length ?? 0))
+              .catch(() => {});
+          }}
         />
       )}
     </div>

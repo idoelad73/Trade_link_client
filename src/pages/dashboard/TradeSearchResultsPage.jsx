@@ -34,8 +34,8 @@ function StarIcon({ fill }) {
   );
 }
 
-// Grade badge shown on each trade card
-function GradeBadge({ avg, count }) {
+// Grade badge shown on each trade card — clickable to open reviews page
+function GradeBadge({ avg, count, tradeId, navigate }) {
   if (!avg) return null;
   const rounded = roundHalf(avg);
 
@@ -46,9 +46,12 @@ function GradeBadge({ avg, count }) {
                      { bg: '#fff1f2', border: '#fca5a5', text: '#dc2626' };
 
   return (
-    <div
-      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border"
+    <button
+      type="button"
+      onClick={() => navigate(`/dashboard/contractor/trade-reviews/${tradeId}`)}
+      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border transition hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer"
       style={{ background: COLOR.bg, borderColor: COLOR.border }}
+      title="View all reviews"
     >
       {/* Stars */}
       <div className="flex items-center gap-px">
@@ -67,7 +70,7 @@ function GradeBadge({ avg, count }) {
           ({count})
         </span>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -96,7 +99,7 @@ const content = {
 };
 
 // ── Pro card ──────────────────────────────────────────────────────────────────
-function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, onOpenCalendar }) {
+function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, onOpenCalendar, navigate }) {
   const busy        = isBusyToday(pro.busyDays);
   const siteBooking = pro.bookings?.find((b) => b.siteName === siteName);
 
@@ -125,7 +128,7 @@ function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, o
         <div className="flex-1 min-w-0">
           <p className="font-bold text-slate-800 text-base truncate">{pro.fullName}</p>
           {pro.avgGrade
-            ? <div className="mt-0.5 mb-0.5"><GradeBadge avg={pro.avgGrade} count={pro.gradeCount ?? 0} /></div>
+            ? <div className="mt-0.5 mb-0.5"><GradeBadge avg={pro.avgGrade} count={pro.gradeCount ?? 0} tradeId={String(pro._id)} navigate={navigate} /></div>
             : <p className="text-[10px] text-slate-300 italic mt-0.5">No reviews yet</p>
           }
           {siteBooking
@@ -266,6 +269,7 @@ export default function TradeSearchResultsPage() {
                 tradeEntry={tradeEntry}
                 slotsLeft={slotsInfo?.workersLeft ?? null}
                 isFull={slotsInfo?.isFull ?? false}
+                navigate={navigate}
                 onOpenCalendar={(proId) =>
                   setCalendarPro({ proId, siteName, siteAddress, siteId, requiredDate, tradeName: trade, workersNo: tradeEntry.workers_no ?? 0 })
                 }
