@@ -12,7 +12,7 @@ import ContractorGradesListModal from '../../components/trade/ContractorGradesLi
 
 const content = {
   en: {
-    tabs: { info: 'Trade Info', schedule: 'Trade Schedule' },
+    tabs: { info: 'Trade Info', schedule: 'Schedule', receipts: 'Receipts' },
     role:    'Trade Professional',
     logOut:  'Log Out',
     schedule: {
@@ -21,7 +21,7 @@ const content = {
     },
   },
   es: {
-    tabs: { info: 'Info del Profesional', schedule: 'Calendario' },
+    tabs: { info: 'Info del Profesional', schedule: 'Calendario', receipts: 'Recibos' },
     role:    'Profesional de Oficios',
     logOut:  'Cerrar Sesión',
     schedule: {
@@ -40,6 +40,7 @@ export default function TradeDashboard() {
   const NAV_ITEMS = [
     { id: 'info',     label: t.tabs.info,     icon: '👤', modal: true  },
     { id: 'schedule', label: t.tabs.schedule, icon: '📅', modal: false },
+    { id: 'receipts', label: t.tabs.receipts, icon: '🧾', modal: false, route: '/dashboard/trade/receipts' },
   ];
 
   const [activeView,      setActiveView]      = useState('schedule');
@@ -125,7 +126,8 @@ export default function TradeDashboard() {
   }, [tradeData?.locationConsent]);
 
   const handleNavClick = (item) => {
-    if (item.modal) { setModalOpen(true); }
+    if (item.route) { navigate(item.route); }
+    else if (item.modal) { setModalOpen(true); }
     else { setActiveView(item.id); setModalOpen(false); }
   };
 

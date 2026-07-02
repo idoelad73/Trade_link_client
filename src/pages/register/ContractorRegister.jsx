@@ -1,10 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { z } from 'zod';
 import Navbar from '../../components/Navbar';
 import useUIStore from '../../stores/uiStore';
 import useAuthStore from '../../stores/authStore';
 import { registerContractor } from '../../api/auth.js';
 import { CONTRACTOR_EXPERTISE } from '../../constants/trades.js';
+
+const emailSchema = z.object({
+  email:        z.string().email('Invalid email address'),
+  confirmEmail: z.string(),
+}).refine(d => d.email === d.confirmEmail, {
+  message: 'Email addresses do not match',
+  path: ['confirmEmail'],
+});
 
 /* ── inline address autocomplete ── */
 function fmtAddr(p) {
@@ -137,7 +146,8 @@ const content = {
     },
     fields: {
       companyName: 'Company Name',
-      email: 'Gmail Address',
+      email: 'Email Address',
+      confirmEmail: 'Confirm Email Address',
       password: 'Password',
       confirmPassword: 'Confirm Password',
       phone: 'Phone Number',
@@ -157,6 +167,7 @@ const content = {
     login: 'Sign in',
     errors: {
       passwordMatch: 'Passwords do not match',
+      emailMatch: 'Email addresses do not match',
       expertiseRequired: 'Please select at least one area of expertise',
     },
   },
@@ -169,7 +180,8 @@ const content = {
     },
     fields: {
       companyName: 'Nombre de la Empresa',
-      email: 'Correo Gmail',
+      email: 'Correo Electrónico',
+      confirmEmail: 'Confirmar Correo Electrónico',
       password: 'Contraseña',
       confirmPassword: 'Confirmar Contraseña',
       phone: 'Número de Teléfono',
@@ -189,6 +201,7 @@ const content = {
     login: 'Iniciar sesión',
     errors: {
       passwordMatch: 'Las contraseñas no coinciden',
+      emailMatch: 'Los correos electrónicos no coinciden',
       expertiseRequired: 'Selecciona al menos un área de especialidad',
     },
   },
@@ -216,7 +229,7 @@ export default function ContractorRegister() {
   const t = content[lang];
 
   const [form, setForm] = useState({
-    companyName: '', email: '', password: '', confirmPassword: '',
+    companyName: '', email: '', confirmEmail: '', password: '', confirmPassword: '',
     phone: '', address: '',
   });
   const [expertise, setExpertise]     = useState([]);
@@ -238,6 +251,11 @@ export default function ContractorRegister() {
     e.preventDefault();
     setError('');
 
+    const emailValidation = emailSchema.safeParse({ email: form.email, confirmEmail: form.confirmEmail });
+    if (!emailValidation.success) {
+      return setError(emailValidation.error.errors[0].message);
+    }
+
     if (form.password !== form.confirmPassword) {
       return setError(t.errors.passwordMatch);
     }
@@ -247,7 +265,7 @@ export default function ContractorRegister() {
 
     setLoading(true);
     try {
-      const { confirmPassword: _, ...payload } = form;
+      const { confirmPassword: _, confirmEmail: __, ...payload } = form;
       const data = await registerContractor({ ...payload, expertise: JSON.stringify(expertise) });
       setAuth(data);
       navigate('/dashboard/contractor');
@@ -295,12 +313,38 @@ export default function ContractorRegister() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>{t.fields.email}</label>
-              <input className={inputCls} type="email" required value={form.email} onChange={set('email')} placeholder={t.placeholders.email} />
+              <input className={inputCls} type="email" required value={form.email} onChange={set('email')} placeholder={t.placeholders.email} autoComplete="email" />
             </div>
             <div>
               <label className={labelCls}>{t.fields.phone}</label>
               <input className={inputCls} type="tel" required value={form.phone} onChange={set('phone')} placeholder={t.placeholders.phone} />
             </div>
+          </div>
+
+          {/* Confirm email — full width with live match indicator */}
+          <div>
+            <label className={labelCls}>{t.fields.confirmEmail}</label>
+            <div className="relative">
+              <input
+                className={inputCls + ' pr-10'}
+                type="email"
+                required
+                autoComplete="off"
+                value={form.confirmEmail}
+                onChange={set('confirmEmail')}
+                placeholder={t.placeholders.email}
+              />
+              {form.confirmEmail.length > 0 && (
+                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-base font-bold ${
+                  form.email === form.confirmEmail ? 'text-green-500' : 'text-red-400'
+                }`}>
+                  {form.email === form.confirmEmail ? '✓' : '✗'}
+                </span>
+              )}
+            </div>
+            {form.confirmEmail.length > 0 && form.email !== form.confirmEmail && (
+              <p className="mt-1 text-xs text-red-500 font-medium">{t.errors.emailMatch}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

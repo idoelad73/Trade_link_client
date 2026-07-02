@@ -1,10 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { z } from 'zod';
 import Navbar from '../../components/Navbar';
 import useUIStore from '../../stores/uiStore';
 import useAuthStore from '../../stores/authStore';
 import { registerTrade } from '../../api/auth.js';
 import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
+
+const emailSchema = z.object({
+  email:        z.string().email('Invalid email address'),
+  confirmEmail: z.string(),
+}).refine(d => d.email === d.confirmEmail, {
+  message: 'Email addresses do not match',
+  path: ['confirmEmail'],
+});
 
 const content = {
   en: {
@@ -19,7 +28,8 @@ const content = {
     },
     fields: {
       fullName: 'Full Name',
-      email: 'Gmail Address',
+      email: 'Email Address',
+      confirmEmail: 'Confirm Email Address',
       password: 'Password',
       confirmPassword: 'Confirm Password',
       phone: 'Phone Number',
@@ -77,6 +87,7 @@ const content = {
     },
     errors: {
       passwordMatch: 'Passwords do not match',
+      emailMatch: 'Email addresses do not match',
       required: 'All fields are required',
     },
   },
@@ -92,7 +103,8 @@ const content = {
     },
     fields: {
       fullName: 'Nombre Completo',
-      email: 'Correo Gmail',
+      email: 'Correo Electrónico',
+      confirmEmail: 'Confirmar Correo Electrónico',
       password: 'Contraseña',
       confirmPassword: 'Confirmar Contraseña',
       phone: 'Número de Teléfono',
@@ -150,6 +162,7 @@ const content = {
     },
     errors: {
       passwordMatch: 'Las contraseñas no coinciden',
+      emailMatch: 'Los correos electrónicos no coinciden',
       required: 'Todos los campos son obligatorios',
     },
   },
@@ -352,7 +365,7 @@ export default function TradeRegister() {
   const t = content[lang];
 
   const [form, setForm] = useState({
-    fullName: '', email: '', password: '', confirmPassword: '',
+    fullName: '', email: '', confirmEmail: '', password: '', confirmPassword: '',
     phone: '', professionality: '', address: '',
     city: '', state: '', zip: '',
     hourlyRate: '',
@@ -429,6 +442,11 @@ export default function TradeRegister() {
     e.preventDefault();
     setError('');
 
+    const emailValidation = emailSchema.safeParse({ email: form.email, confirmEmail: form.confirmEmail });
+    if (!emailValidation.success) {
+      return setError(emailValidation.error.errors[0].message);
+    }
+
     if (form.password !== form.confirmPassword) {
       return setError(t.errors.passwordMatch);
     }
@@ -456,7 +474,7 @@ export default function TradeRegister() {
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => {
-        if (v !== null && v !== undefined && k !== 'confirmPassword') fd.append(k, v);
+        if (v !== null && v !== undefined && k !== 'confirmPassword' && k !== 'confirmEmail') fd.append(k, v);
       });
       Object.entries(files).forEach(([k, v]) => {
         if (v) fd.append(k, v);
@@ -609,12 +627,38 @@ export default function TradeRegister() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>{t.fields.email}</label>
-              <input className={inputCls} type="email" required value={form.email} onChange={set('email')} placeholder={t.placeholders.email} />
+              <input className={inputCls} type="email" required value={form.email} onChange={set('email')} placeholder={t.placeholders.email} autoComplete="email" />
             </div>
             <div>
               <label className={labelCls}>{t.fields.phone}</label>
               <input className={inputCls} type="tel" required value={form.phone} onChange={set('phone')} placeholder={t.placeholders.phone} />
             </div>
+          </div>
+
+          {/* Confirm email — full width with live match indicator */}
+          <div>
+            <label className={labelCls}>{t.fields.confirmEmail}</label>
+            <div className="relative">
+              <input
+                className={inputCls + ' pr-10'}
+                type="email"
+                required
+                autoComplete="off"
+                value={form.confirmEmail}
+                onChange={set('confirmEmail')}
+                placeholder={t.placeholders.email}
+              />
+              {form.confirmEmail.length > 0 && (
+                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-base font-bold ${
+                  form.email === form.confirmEmail ? 'text-green-500' : 'text-red-400'
+                }`}>
+                  {form.email === form.confirmEmail ? '✓' : '✗'}
+                </span>
+              )}
+            </div>
+            {form.confirmEmail.length > 0 && form.email !== form.confirmEmail && (
+              <p className="mt-1 text-xs text-red-500 font-medium">{t.errors.emailMatch}</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

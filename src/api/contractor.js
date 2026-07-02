@@ -55,6 +55,10 @@ export const updateWorkPlanDate    = (siteId, tradeName, requiredDate) => api.pa
 export const requestWorkPlanDate   = (siteId, tradeName, requiredDate, lang) => api.post(`/contractor/sites/${siteId}/work-plan/request-date`, { tradeName, requiredDate, lang }).then(r => r.data);
 export const deleteWorkPlanTrade = (siteId, tradeName) => api.delete(`/contractor/sites/${siteId}/work-plan`, { data: { tradeName } }).then(r => r.data);
 
+// Orders / receipts
+export const getMyReceipts = (params = {}) => api.get('/contractor/receipts', { params }).then(r => r.data.receipts);
+export const getMyOrders   = () => api.get('/contractor/orders').then(r => r.data.orders);
+
 // Payment approvals (tradehours_orders)
 export const getPaymentApprovalsCount  = ()               => api.get('/contractor/payment-approvals/count').then(r => r.data.pendingCount);
 export const getPaymentApprovals       = ()               => api.get('/contractor/payment-approvals').then(r => r.data.orders);

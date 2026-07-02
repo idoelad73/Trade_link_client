@@ -32,6 +32,8 @@ import ProjectsShowcase from '../pages/ProjectsShowcase';
 import TradesShowcase from '../pages/TradesShowcase';
 import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import ResetPasswordPage from '../pages/ResetPasswordPage';
+import MyReceiptsPage from '../pages/dashboard/MyReceiptsPage';
+import TradeReceiptsPage from '../pages/dashboard/TradeReceiptsPage';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -52,10 +54,12 @@ const router = createBrowserRouter(
       <Route path="/dashboard/contractor/trade-search"        element={<TradeSearchResultsPage />} />
       <Route path="/dashboard/contractor/payment-approvals"  element={<PaymentApprovalsPage />} />
       <Route path="/dashboard/contractor/trade-reviews/:tradeId" element={<TradeReviewsPage />} />
+      <Route path="/dashboard/contractor/receipts"              element={<MyReceiptsPage />} />
       <Route path="/dashboard/trade"                         element={<TradeDashboard />} />
       <Route path="/dashboard/trade/jobs"                  element={<JobResultsPage />} />
       <Route path="/dashboard/trade/payment-approved"                    element={<TradePaymentApprovedPage />} />
       <Route path="/dashboard/trade/contractor-reviews/:contractorId"   element={<ContractorReviewsPage />} />
+      <Route path="/dashboard/trade/receipts"                           element={<TradeReceiptsPage />} />
 
       {/* Auth — uncomment when pages are built */}
       {/* <Route element={<AuthLayout />}>

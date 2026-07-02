@@ -17,7 +17,7 @@ const content = {
       info:     'Contractor Info',
       addSite:  'Add Project',
       allSites: 'All Projects',
-      schedule: 'Projects Schedule',
+      receipts: 'Receipts',
     },
     role:   'Contractor',
     logOut: 'Log Out',
@@ -27,7 +27,6 @@ const content = {
       addBtn:   'Add Project',
       empty:    { title: 'No projects yet', desc: 'Add your first construction project to get started.', btn: 'Add Your First Project' },
     },
-    schedule: { title: 'Projects Schedule', desc: 'Schedule management coming soon.' },
     status:   { active: 'active', completed: 'completed', on_hold: 'on hold' },
     findTrade: {
       tradesLabel: 'Trades Needed',
@@ -54,7 +53,7 @@ const content = {
       info:     'Info del Contratista',
       addSite:  'Agregar Proyecto',
       allSites: 'Todos los Proyectos',
-      schedule: 'Calendario de Proyectos',
+      receipts: 'Recibos',
     },
     role:   'Contratista',
     logOut: 'Cerrar Sesión',
@@ -64,7 +63,6 @@ const content = {
       addBtn:   'Agregar Proyecto',
       empty:    { title: 'Sin proyectos aún', desc: 'Agrega tu primer proyecto de construcción para comenzar.', btn: 'Agregar Primer Proyecto' },
     },
-    schedule: { title: 'Calendario de Proyectos', desc: 'Gestión de calendario próximamente.' },
     status:   { active: 'activo', completed: 'completado', on_hold: 'en pausa' },
     findTrade: {
       tradesLabel: 'Oficios Necesarios',
@@ -509,7 +507,7 @@ export default function ContractorDashboard() {
     { id: 'info',     label: t.tabs.info,     icon: '👤', modal: true  },
     { id: 'addSite',  label: t.tabs.addSite,  icon: '➕', modal: true  },
     { id: 'allSites', label: t.tabs.allSites, icon: '🏗️', modal: false },
-    { id: 'schedule', label: t.tabs.schedule, icon: '📅', modal: false },
+    { id: 'receipts', label: t.tabs.receipts, icon: '🧾', modal: false, route: '/dashboard/contractor/receipts' },
   ];
 
   const [activeView,   setActiveView]   = useState('allSites');
@@ -643,7 +641,8 @@ export default function ContractorDashboard() {
   }, [activeView]);
 
   const handleNavClick = (item) => {
-    if (item.modal) { setOpenModal(item.id); }
+    if (item.route) { navigate(item.route); }
+    else if (item.modal) { setOpenModal(item.id); }
     else { setActiveView(item.id); setOpenModal(null); }
   };
 
@@ -843,13 +842,6 @@ export default function ContractorDashboard() {
           </div>
         )}
 
-        {activeView === 'schedule' && (
-          <div className="text-center py-20">
-            <div className="text-6xl mb-4">📅</div>
-            <h3 className="text-lg font-bold text-slate-700 mb-2">{t.schedule.title}</h3>
-            <p className="text-slate-400 text-sm">{t.schedule.desc}</p>
-          </div>
-        )}
       </main>
 
       {openModal === 'info'    && <ContractorInfoModal onClose={() => setOpenModal(null)} />}
