@@ -43,6 +43,7 @@ export default function TradeDashboard() {
     { id: 'receipts', label: t.tabs.receipts, icon: '🧾', modal: false, route: '/dashboard/trade/receipts' },
   ];
 
+  const [sidebarOpen,     setSidebarOpen]     = useState(false);
   const [activeView,      setActiveView]      = useState('schedule');
   const [modalOpen,       setModalOpen]       = useState(false);
   const [messagesOpen,    setMessagesOpen]    = useState(false);
@@ -134,7 +135,118 @@ export default function TradeDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-slate-50 to-amber-50 font-sans text-slate-800">
 
-      <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-sky-100 shadow-sm">
+      {/* ── Mobile top bar ───────────────────────────────────────────────── */}
+      <div className="sm:hidden sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-sky-100 shadow-sm flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-sky-400 to-amber-400 flex items-center justify-center shadow">
+            <span className="text-white font-bold text-xs">T</span>
+          </div>
+          <span className="text-base font-bold text-sky-600 tracking-tight">TradeLink</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {(paymentCount > 0 || (tradeData?.availabilityMessages > 0) || gradableContractors.length > 0) && (
+            <span className="w-2 h-2 rounded-full bg-amber-400" />
+          )}
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="flex items-center justify-center w-9 h-9 rounded-xl bg-sky-50 text-sky-700 active:bg-sky-100 transition"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Mobile sidebar ────────────────────────────────────────────────── */}
+      <div className={`fixed inset-0 z-50 sm:hidden transition-opacity duration-200 ${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+        <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+        <div className={`absolute left-0 top-0 h-full w-72 max-w-[82vw] bg-white flex flex-col shadow-2xl transform transition-transform duration-200 ease-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+
+          {/* Sidebar header */}
+          <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100 bg-gradient-to-r from-sky-50 to-white">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-400 to-amber-400 flex items-center justify-center shadow">
+                <span className="text-white font-bold text-sm">T</span>
+              </div>
+              <span className="text-lg font-bold text-sky-600 tracking-tight">TradeLink</span>
+            </div>
+            <button onClick={() => setSidebarOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-100 text-slate-400 hover:bg-slate-200 transition font-bold text-sm">✕</button>
+          </div>
+
+          {/* User info */}
+          <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 border-b border-slate-100">
+            {tradeData?.photo
+              ? <img src={tradeData.photo} alt={user?.fullName} className="w-10 h-10 rounded-xl object-cover object-top border-2 border-sky-100 flex-shrink-0" />
+              : <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-100 to-amber-100 flex items-center justify-center text-xl flex-shrink-0">🔧</div>
+            }
+            <div className="min-w-0">
+              <p className="font-bold text-slate-800 text-sm truncate">{user?.fullName}</p>
+              <p className="text-xs text-slate-400">{t.role}</p>
+            </div>
+          </div>
+
+          {/* Nav + actions */}
+          <nav className="flex flex-col px-3 py-3 gap-1 flex-1 overflow-y-auto">
+            {NAV_ITEMS.map((item) => {
+              const isActive = !item.modal && activeView === item.id;
+              return (
+                <button key={item.id} onClick={() => { handleNavClick(item); setSidebarOpen(false); }}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left w-full ${
+                    isActive ? 'bg-sky-50 text-sky-700 border border-sky-200' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'
+                  }`}>
+                  <span className="text-base">{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+
+            <div className="my-2 border-t border-slate-100" />
+
+            <button onClick={() => { setMessagesOpen(true); setSidebarOpen(false); }}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all text-left w-full">
+              <span className="text-base">📩</span>
+              <span>Availability Messages</span>
+              {tradeData?.availabilityMessages > 0 && (
+                <span className="ml-auto text-xs font-extrabold text-amber-500">{tradeData.availabilityMessages}</span>
+              )}
+            </button>
+
+            <button onClick={() => { navigate('/dashboard/trade/payment-approved'); setSidebarOpen(false); }}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all text-left w-full">
+              <span className="text-base">💵</span>
+              <span>Approved Payments</span>
+              {paymentCount > 0 && (
+                <span className="ml-auto text-xs font-extrabold text-emerald-500">{paymentCount}</span>
+              )}
+            </button>
+
+            <button onClick={async () => {
+                const fresh = await getGradableContractors().catch(() => []);
+                setGradableContractors(fresh);
+                if (fresh.length > 0) { setGradeOpen(true); setSidebarOpen(false); }
+              }}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all text-left w-full">
+              <span className="text-base">⭐</span>
+              <span>Rate Contractors</span>
+              {gradableContractors.length > 0 && (
+                <span className="ml-auto text-xs font-extrabold text-amber-500">{gradableContractors.length}</span>
+              )}
+            </button>
+          </nav>
+
+          {/* Logout */}
+          <div className="px-3 pb-5 pt-2 border-t border-slate-100">
+            <button onClick={() => { clearAuth(); navigate('/'); }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-all">
+              🚪 <span>{t.logOut}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Desktop nav (hidden on mobile) ───────────────────────────────── */}
+      <nav className="hidden sm:block sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-sky-100 shadow-sm">
         <div className="max-w-5xl mx-auto px-3 sm:px-6 flex items-center gap-0">
 
           <div className="flex items-center gap-2 py-3 sm:py-4 pr-4 sm:pr-8 border-r border-slate-100 mr-2 sm:mr-4 flex-shrink-0">
