@@ -1,12 +1,8 @@
 import axios from 'axios';
 import useAuthStore from '../stores/authStore.js';
 
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-// eslint-disable-next-line no-console
-console.log('[axios] baseURL =', BASE);
-
 const api = axios.create({
-  baseURL: BASE,
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
   withCredentials: true,
 });
 
