@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createSite } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
 import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
+import api from '../../api/axios.js';
 
 /* ── inline address autocomplete (Photon / OpenStreetMap, no API key) ── */
 function fmtAddr(p) {
@@ -37,8 +38,7 @@ function AddressField({ onChange, inputCls, placeholder }) {
     const tid = setTimeout(async () => {
       console.log('[AddressField] fetching Photon for:', q);
       try {
-        const res  = await fetch(`/api/address/autocomplete?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
+        const { data } = await api.get('/address/autocomplete', { params: { q } });
         console.log('[AddressField] raw Photon response:', data);
         if (cancelled) return;
         const list = (data.features || [])

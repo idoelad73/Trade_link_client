@@ -6,6 +6,7 @@ import useUIStore from '../../stores/uiStore';
 import useAuthStore from '../../stores/authStore';
 import { registerTrade } from '../../api/auth.js';
 import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
+import api from '../../api/axios.js';
 
 const emailSchema = z.object({
   email:        z.string().email('Invalid email address'),
@@ -216,8 +217,7 @@ function AddressField({ onSelect, inputCls, placeholder, required }) {
 
     const tid = setTimeout(async () => {
       try {
-        const res  = await fetch(`/api/address/autocomplete?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
+        const { data } = await api.get('/address/autocomplete', { params: { q } });
         if (cancelled) return;
         const list = (data.features || [])
           .map(f => ({ label: fmtAddr(f.properties), props: f.properties, coords: f.geometry?.coordinates }))
