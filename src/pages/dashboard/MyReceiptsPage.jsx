@@ -346,53 +346,53 @@ export default function MyReceiptsPage() {
         )}
 
         {!loading && receipts.length > 0 && (
-          <div className="space-y-4">
+          <div className="space-y-2 sm:space-y-4">
             {receipts.map((r) => (
               <div key={r._id} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
                 <div className="flex items-stretch">
                   <div className={`w-1.5 flex-shrink-0 ${r.paymentStatus === 'paid' ? 'bg-emerald-400' : 'bg-amber-300'}`} />
-                  <div className="flex-1 p-5">
+                  <div className="flex-1 p-3 sm:p-5">
 
                     {/* Primary: site name bold + large. Secondary: trade name bold */}
-                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
                       <div className="flex-1 min-w-0">
-                        <p className="font-extrabold text-slate-800 text-base truncate">📍 {r.site_name ?? '—'}</p>
+                        <p className="font-extrabold text-slate-800 text-sm sm:text-base truncate">📍 {r.site_name ?? '—'}</p>
                         <p className="text-xs font-bold text-slate-600 truncate mt-0.5">
                           🔧 {r.trade_name ?? '—'}
                           {r.trade_professionality ? <span className="font-normal text-slate-400"> · {r.trade_professionality}</span> : ''}
-                          {r.site_address ? <span className="font-normal text-slate-400"> · {r.site_address}</span> : ''}
+                          {r.site_address ? <span className="hidden sm:inline font-normal text-slate-400"> · {r.site_address}</span> : ''}
                         </p>
                       </div>
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <span className="text-xs font-bold text-slate-400 tracking-wider">{r.receipt_number}</span>
-                        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border capitalize ${statusPill(r.paymentStatus)}`}>
+                      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                        <span className="text-[10px] sm:text-xs font-bold text-slate-400 tracking-wider">{r.receipt_number}</span>
+                        <span className={`text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full border capitalize ${statusPill(r.paymentStatus)}`}>
                           {t.status[r.paymentStatus] ?? r.paymentStatus}
                         </span>
-                        <span className="text-xs text-slate-400">{fmtDate(r.date)}</span>
+                        <span className="text-[10px] sm:text-xs text-slate-400">{fmtDate(r.date)}</span>
                       </div>
                     </div>
 
                     {/* Stat chips */}
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-2 sm:mt-3 flex flex-wrap gap-1.5 sm:gap-2">
                       {[['⏱️', `${r.actual_hours ?? '—'}h`, 'hours'], ['👷', r.workers_no ?? '—', 'workers'], ['💵', `$${r.hourly_rate ?? '—'}/hr`, 'rate']].map(([icon, val, label]) => (
-                        <div key={label} className="flex items-center gap-1 bg-slate-50 rounded-lg px-2.5 py-1">
-                          <span className="text-sm">{icon}</span>
+                        <div key={label} className="flex items-center gap-1 bg-slate-50 rounded-lg px-2 py-0.5 sm:px-2.5 sm:py-1">
+                          <span className="text-xs sm:text-sm">{icon}</span>
                           <span className="text-xs font-bold text-slate-700">{val}</span>
-                          <span className="text-xs text-slate-400">{label}</span>
+                          <span className="text-[10px] sm:text-xs text-slate-400">{label}</span>
                         </div>
                       ))}
-                      <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1 ml-auto">
-                        <span className="text-xs text-slate-500">Total</span>
-                        <span className="text-sm font-extrabold text-emerald-600">${r.order_sum ?? 0}</span>
+                      <div className="flex items-center gap-1 bg-emerald-50 border border-emerald-100 rounded-lg px-2 py-0.5 sm:px-2.5 sm:py-1 ml-auto">
+                        <span className="text-[10px] sm:text-xs text-slate-500">Total</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-emerald-600">${r.order_sum ?? 0}</span>
                       </div>
                     </div>
 
                     {/* Actions */}
-                    <div className="mt-4 flex gap-2 justify-end">
-                      <button onClick={() => setPreview(r)} className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition active:scale-95">
+                    <div className="mt-2 sm:mt-4 flex gap-2 justify-end">
+                      <button onClick={() => setPreview(r)} className="flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition active:scale-95">
                         🔍 {t.preview}
                       </button>
-                      <button onClick={() => generatePDF(r)} className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-sky-500 text-white hover:opacity-90 shadow shadow-emerald-100 transition active:scale-95">
+                      <button onClick={() => generatePDF(r)} className="flex items-center gap-1 sm:gap-1.5 text-xs font-semibold px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-sky-500 text-white hover:opacity-90 shadow shadow-emerald-100 transition active:scale-95">
                         ⬇️ {t.download}
                       </button>
                     </div>
