@@ -6,8 +6,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-
-const PHOTON = 'https://photon.komoot.io/api/';
+import api from '../../api/axios.js';
 
 function fmtAddr(p) {
   const parts = [];
@@ -106,30 +105,23 @@ export default function AddressAutocomplete({
 
   const inputRef = useRef(null);
   const timer    = useRef(null);
-  const ctrl     = useRef(null);
 
   useEffect(() => { setText(value); }, [value]);
 
   async function doSearch(q) {
-    if (ctrl.current) ctrl.current.abort();
-    ctrl.current = new AbortController();
     setBusy(true);
     setItems([]);
     setLastQuery(q);
     try {
-      const res  = await fetch(
-        `${PHOTON}?q=${encodeURIComponent(q)}&countrycode=us&limit=6&lang=en`,
-        { signal: ctrl.current.signal }
-      );
-      const data = await res.json();
+      const { data } = await api.get('/address/autocomplete', { params: { q } });
       const list = (data.features || [])
         .map(f => fmtAddr(f.properties))
         .filter(Boolean)
         .filter((a, i, arr) => arr.indexOf(a) === i);
       setItems(list);
       if (list.length > 0) setShowModal(true);
-    } catch (e) {
-      if (e.name !== 'AbortError') setItems([]);
+    } catch {
+      setItems([]);
     } finally {
       setBusy(false);
     }
