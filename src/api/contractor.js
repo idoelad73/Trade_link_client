@@ -68,6 +68,9 @@ export const updatePaymentApproval = (orderId, status, overagePiId = null) =>
   api.patch(`/contractor/payment-approvals/${orderId}`, { status, ...(overagePiId ? { overagePiId } : {}) }).then(r => r.data);
 
 
+// Trade types (for dropdown)
+export const getTradeTypes = () => api.get('/trade-types').then(r => r.data.types);
+
 // Trade grading
 export const getGradableTrades   = () => api.get('/contractor/trade-grades/eligible').then(r => r.data.trades);
 export const getTradeReviews     = (tradeId) => api.get(`/contractor/trade-grades/${tradeId}/reviews`).then(r => r.data);

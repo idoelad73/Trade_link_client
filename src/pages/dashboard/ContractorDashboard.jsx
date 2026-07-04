@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades, getSiteDepositSummary } from '../../api/contractor.js';
+import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades, getSiteDepositSummary, getTradeTypes } from '../../api/contractor.js';
 import ContractorInfoModal from '../../components/contractor/ContractorInfoModal.jsx';
 import AddSiteModal from '../../components/contractor/AddSiteModal.jsx';
 import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx';
@@ -405,7 +405,7 @@ function DistancePanel({ unit, setUnit, distance, setDistance, maxRate, setMaxRa
   const ratingPct   = (minRating / 5) * 100;
 
   return (
-    <div className="mt-8 bg-white/80 backdrop-blur-sm rounded-3xl border border-orange-100 shadow-md px-6 py-5 space-y-6">
+    <div className="space-y-6">
 
       {/* Distance */}
       <div>
@@ -530,6 +530,8 @@ export default function ContractorDashboard() {
   const [gradableTrades,       setGradableTrades]       = useState(null); // null = modal closed
   const [gradableTradesCount,  setGradableTradesCount]  = useState(0);    // for badge
   const [gradeLoading,         setGradeLoading]         = useState(false);
+  const [tradeFilter,          setTradeFilter]          = useState('');
+  const [tradeTypes,           setTradeTypes]           = useState([]);
 
   const refreshApplicationCount = () =>
     getApplications()
@@ -595,7 +597,6 @@ export default function ContractorDashboard() {
   useEffect(() => {
     refreshApplicationCount();
     refreshPaymentCount();
-    // Fetch gradable trades once on login — show modal and badge if any need reviewing
     getGradableTrades()
       .then(trades => {
         const count = trades?.length ?? 0;
@@ -603,6 +604,7 @@ export default function ContractorDashboard() {
         if (count) setGradableTrades(trades);
       })
       .catch(() => {});
+    getTradeTypes().then(setTradeTypes).catch(() => {});
   }, []);
 
   async function handleOpenGradeModal() {
@@ -917,32 +919,73 @@ export default function ContractorDashboard() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {sites.map((site) => (
-                    <SiteCard
-                      key={site._id}
-                      site={site}
-                      t={t}
-                      displayDist={displayDist}
-                      selectedTrade={selection?.siteId === site._id ? selection.trade : null}
-                      onSelectTrade={handleSelectTrade}
-                      onFind={handleFind}
-                      onManageTrades={setManageSite}
-                      onUpdatePhoto={setPhotoSite}
-                      onWorkPlan={(siteId) => navigate(`/dashboard/contractor/work-plan/${siteId}`)}
-                      searchState={findingFor?.siteId === site._id ? { loading: true } : null}
-                    />
-                  ))}
+                {/* ── Search filters (above grid) ──────────────────────────── */}
+                <div className="mb-6 bg-white/80 backdrop-blur-sm rounded-3xl border border-orange-100 shadow-md px-6 py-5">
+
+                  {/* Trade type dropdown */}
+                  <div className="mb-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-700">🔧 Trade Type</h3>
+                        <p className="text-xs text-slate-400 mt-0.5">Filter projects and pre-select a trade</p>
+                      </div>
+                      {tradeFilter && (
+                        <button
+                          onClick={() => setTradeFilter('')}
+                          className="text-xs font-semibold text-slate-400 hover:text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100 transition"
+                        >
+                          ✕ Clear
+                        </button>
+                      )}
+                    </div>
+                    <select
+                      value={tradeFilter}
+                      onChange={(e) => setTradeFilter(e.target.value)}
+                      className="w-full sm:w-64 bg-white border-2 border-orange-100 focus:border-orange-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 appearance-none cursor-pointer outline-none transition"
+                    >
+                      <option value="">— All Trades —</option>
+                      {tradeTypes.map((type) => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="border-t border-slate-100 mb-5" />
+
+                  {/* Distance / rate / rating sliders */}
+                  <DistancePanel
+                    unit={unit} setUnit={setUnit}
+                    distance={distance} setDistance={setDistance}
+                    maxRate={maxRate} setMaxRate={setMaxRate}
+                    minRating={minRating} setMinRating={setMinRating}
+                    t={t.findTrade}
+                  />
                 </div>
 
-                <DistancePanel
-                  unit={unit} setUnit={setUnit}
-                  distance={distance} setDistance={setDistance}
-                  maxRate={maxRate} setMaxRate={setMaxRate}
-                  minRating={minRating} setMinRating={setMinRating}
-                  t={t.findTrade}
-                />
-
+                {/* ── Project grid ─────────────────────────────────────────── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {sites.map((site) => {
+                    const autoTrade = tradeFilter && site.tradesNeeded?.some((tr) => tr.name === tradeFilter)
+                      ? tradeFilter
+                      : null;
+                    const selectedTrade = autoTrade ?? (selection?.siteId === site._id ? selection.trade : null);
+                    return (
+                      <SiteCard
+                        key={site._id}
+                        site={site}
+                        t={t}
+                        displayDist={displayDist}
+                        selectedTrade={selectedTrade}
+                        onSelectTrade={handleSelectTrade}
+                        onFind={handleFind}
+                        onManageTrades={setManageSite}
+                        onUpdatePhoto={setPhotoSite}
+                        onWorkPlan={(siteId) => navigate(`/dashboard/contractor/work-plan/${siteId}`)}
+                        searchState={findingFor?.siteId === site._id ? { loading: true } : null}
+                      />
+                    );
+                  })}
+                </div>
               </>
             )}
           </div>
