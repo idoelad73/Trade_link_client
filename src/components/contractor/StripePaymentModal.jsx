@@ -6,6 +6,7 @@ export default function StripePaymentModal({
   amount,
   tradeName,
   orderId,
+  messageId = null,   // set for direct/quick-search deposits; null for site-based
   onClose,
   onSuccess,
   isDeposit = false,
@@ -73,9 +74,9 @@ export default function StripePaymentModal({
       console.log('[stripe-modal] confirmPayment success — PI status:', paymentIntent?.status, 'id:', paymentIntent?.id);
       if (isDeposit && paymentIntent?.id) {
         try {
-          console.log('[stripe-modal] calling confirmDeposit — siteId(orderId):', orderId, 'piId:', paymentIntent.id);
-          const result = await confirmDeposit(orderId, paymentIntent.id);
-          console.log('[stripe-modal] ✅ confirmDeposit OK — messageId:', result.messageId, '→ onSuccess will refresh trade card');
+          console.log('[stripe-modal] calling confirmDeposit — orderId:', orderId, 'messageId:', messageId, 'piId:', paymentIntent.id);
+          const result = await confirmDeposit(orderId, paymentIntent.id, messageId);
+          console.log('[stripe-modal] ✅ confirmDeposit OK — messageId:', result.messageId);
         } catch (err) {
           console.error('[stripe-modal] ❌ confirmDeposit error:', err?.response?.data ?? err.message);
         }

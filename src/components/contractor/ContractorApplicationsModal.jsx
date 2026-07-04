@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getApplications, approveApplication, approveWorkerOffer, approveReschedule, declineReschedule } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
 import { toast } from '../../utils/toast.js';
+import DepositSummaryModal from './DepositSummaryModal.jsx';
 
 const content = {
   en: {
@@ -51,6 +52,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
   const [approving,        setApproving]        = useState(null);
   const [approvingOffer,   setApprovingOffer]   = useState(null);
   const [actingReschedule, setActingReschedule] = useState(null);
+  const [depositData,      setDepositData]      = useState(null); // direct-search deposit after worker offer approval
 
   useEffect(() => {
     getApplications()
@@ -256,10 +258,19 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                 👷 Worker Offers — Pending Approval
               </p>
               {workerOffers.map((offer) => {
-                const tradeSlot = offer.site?.tradesNeeded?.find(
+                const tradeSlot   = offer.site?.tradesNeeded?.find(
                   (tr) => tr.name?.toLowerCase() === (offer.tradeName || offer.tradePro?.professionality || '').toLowerCase()
                 );
                 const totalNeeded = tradeSlot?.workers_no ?? null;
+                const isDirect    = !offer.site;
+                // Total hours: site-based uses tradeSlot, direct-search uses offer.totalHours
+                const totalHours  = tradeSlot?.totalHours ?? offer.totalHours ?? null;
+                const rate        = offer.tradePro?.hourlyRate ?? null;
+                const workers     = offer.workersOffered ?? 1;
+                const deposit     = (rate && totalHours)
+                  ? parseFloat((workers * rate * totalHours).toFixed(2))
+                  : null;
+
                 return (
                   <div key={offer._id} className="bg-white rounded-2xl border border-orange-200 shadow-sm overflow-hidden">
                     <div className="h-1 w-full bg-gradient-to-r from-orange-400 to-amber-400" />
@@ -277,11 +288,16 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                         ⏳ Pending
                       </span>
                     </div>
+
                     {/* Details grid */}
                     <div className="px-4 py-3 grid grid-cols-2 gap-2">
                       <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Project</p>
-                        <p className="text-xs font-bold text-slate-700 truncate">🏗️ {offer.site?.name}</p>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">
+                          {isDirect ? 'Quick Search' : 'Project'}
+                        </p>
+                        <p className="text-xs font-bold text-slate-700 truncate">
+                          {isDirect ? '🔍 Direct Request' : `🏗️ ${offer.site?.name}`}
+                        </p>
                       </div>
                       <div className="bg-orange-50 border border-orange-100 rounded-xl px-3 py-2">
                         <p className="text-[10px] font-semibold text-orange-400 uppercase tracking-wide mb-0.5">Scheduled Date</p>
@@ -289,7 +305,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                       </div>
                       <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
                         <p className="text-[10px] font-semibold text-amber-500 uppercase tracking-wide mb-0.5">Workers Offered</p>
-                        <p className="text-sm font-extrabold text-amber-700">👷 {offer.workersOffered ?? 1}</p>
+                        <p className="text-sm font-extrabold text-amber-700">👷 {workers}</p>
                       </div>
                       {totalNeeded != null && (
                         <div className="bg-sky-50 border border-sky-100 rounded-xl px-3 py-2">
@@ -297,20 +313,43 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                           <p className="text-sm font-extrabold text-sky-700">👥 {totalNeeded}</p>
                         </div>
                       )}
+                      {totalHours != null && (
+                        <div className="bg-violet-50 border border-violet-100 rounded-xl px-3 py-2">
+                          <p className="text-[10px] font-semibold text-violet-400 uppercase tracking-wide mb-0.5">Total Hours</p>
+                          <p className="text-sm font-extrabold text-violet-700">⏱ {totalHours}h</p>
+                        </div>
+                      )}
+                      {rate != null && (
+                        <div className="bg-slate-50 border border-slate-100 rounded-xl px-3 py-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Hourly Rate</p>
+                          <p className="text-sm font-extrabold text-slate-700">💵 ${rate}/hr</p>
+                        </div>
+                      )}
                     </div>
-                    {/* Trade + hours context */}
-                    {tradeSlot?.totalHours && (
-                      <div className="px-4 pb-1 flex flex-wrap gap-1.5">
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-violet-50 border border-violet-100 text-violet-700">
-                          🔧 {offer.tradeName || offer.tradePro?.professionality}
-                        </span>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-lg bg-sky-50 border border-sky-100 text-sky-700">
-                          ⏱ {tradeSlot.totalHours}h × {offer.workersOffered ?? 1} = {tradeSlot.totalHours * (offer.workersOffered ?? 1)}h
-                        </span>
+
+                    {/* Total job cost breakdown */}
+                    {deposit != null && (
+                      <div className="mx-4 mb-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5">
+                        <p className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wide mb-1">Total Job Cost</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-0.5">👷 {workers}w</span>
+                          <span className="text-[10px] text-slate-400">×</span>
+                          <span className="text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-2 py-0.5">⏱ {totalHours}h</span>
+                          <span className="text-[10px] text-slate-400">×</span>
+                          <span className="text-xs font-semibold text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-2 py-0.5">💵 ${rate}/hr</span>
+                          <span className="text-[10px] text-slate-400">=</span>
+                          <span className="text-sm font-extrabold text-emerald-700">${deposit.toFixed(2)}</span>
+                        </div>
+                        {isDirect && (
+                          <p className="text-[10px] text-emerald-600 mt-1 font-medium">
+                            🔒 A refundable deposit will be required after approval.
+                          </p>
+                        )}
                       </div>
                     )}
+
                     {/* Approve button */}
-                    <div className="px-4 pb-4 pt-3">
+                    <div className="px-4 pb-4">
                       <button
                         onClick={async () => {
                           setApprovingOffer(offer._id);
@@ -318,8 +357,25 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                             const result = await approveWorkerOffer(offer._id);
                             console.log('[approveWorkerOffer] response:', result);
                             setWorkerOffers((prev) => prev.filter((o) => o._id !== offer._id));
-                            toast.success(`✅ ${offer.tradePro?.fullName} — ${offer.workersOffered} worker${offer.workersOffered !== 1 ? 's' : ''} confirmed`);
+                            toast.success(`✅ ${offer.tradePro?.fullName} — ${workers} worker${workers !== 1 ? 's' : ''} confirmed`);
                             onApproved?.();
+                            // Direct search with deposit required → show deposit flow immediately
+                            if (isDirect && result.minDeposit > 0) {
+                              setDepositData({
+                                messageId: result.messageId,
+                                siteName:  offer.tradePro?.fullName ?? 'Direct Request',
+                                total:     result.minDeposit,
+                                rows: [{
+                                  messageId:       result.messageId,
+                                  tradeProName:    offer.tradePro?.fullName ?? '—',
+                                  professionality: offer.tradePro?.professionality ?? '—',
+                                  min_deposit:     result.minDeposit,
+                                  workers,
+                                  hourlyRate:      rate,
+                                  totalHours,
+                                }],
+                              });
+                            }
                           } catch (err) {
                             toast.error('Failed to approve. Please try again.');
                           } finally {
@@ -329,7 +385,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                         disabled={!!approvingOffer}
                         className="w-full py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 disabled:opacity-60 disabled:cursor-not-allowed transition shadow-sm active:scale-[0.98]"
                       >
-                        {approvingOffer === offer._id ? '…' : `✓ Approve ${offer.workersOffered ?? 1} Worker${(offer.workersOffered ?? 1) !== 1 ? 's' : ''}`}
+                        {approvingOffer === offer._id ? '…' : `✓ Approve ${workers} Worker${workers !== 1 ? 's' : ''}`}
                       </button>
                     </div>
                   </div>
@@ -423,6 +479,17 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
       </div>
     </div>
 
+    {/* ── Direct-search deposit modal (shown after worker offer approval) ── */}
+    {depositData && (
+      <DepositSummaryModal
+        messageId={depositData.messageId}
+        siteName={depositData.siteName}
+        rows={depositData.rows}
+        total={depositData.total}
+        onClose={() => setDepositData(null)}
+        onSuccess={() => { setDepositData(null); onApproved?.(); }}
+      />
+    )}
     </>
   );
 }

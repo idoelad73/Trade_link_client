@@ -22,13 +22,15 @@ export const findTradesForSite = (siteId, trade, distance, unit, maxRate, minRat
   }).then(r => r.data);
 
 // Trade pro calendar (busy days)
-export const getTradeBusyDays = (tradeId) =>
+export const getTradeBusyDays    = (tradeId) =>
   api.get(`/contractor/trade-pros/${tradeId}/busy-days`).then(r => r.data.pro);
+export const getTradeProProfile  = (tradeId) =>
+  api.get(`/contractor/trade-pros/${tradeId}/profile`).then(r => r.data.pro);
 
 // Ask trade pro for availability on a specific date
-export const askAvailability = (tradeId, date, siteName, siteAddress, lang, siteId, tradeName, workersOffered) =>
+export const askAvailability = (tradeId, date, siteName, siteAddress, lang, siteId, tradeName, workersOffered, totalHours) =>
   api.post(`/contractor/trade-pros/${tradeId}/ask-availability`, {
-    date, siteName, siteAddress, lang, siteId, tradeName, workersOffered,
+    date, siteName, siteAddress, lang, siteId, tradeName, workersOffered, totalHours,
   }).then(r => r.data);
 
 // Get remaining worker slots for a trade+date on a site
@@ -38,8 +40,12 @@ export const getWorkersLeft = (siteId, tradeName, date) =>
 export const getSiteDepositSummary = (siteId) =>
   api.get(`/contractor/sites/${siteId}/deposit-summary`).then(r => r.data);
 
-export const confirmDeposit = (siteId, paymentIntentId) =>
-  api.post('/contractor/deposit-confirmed', { siteId, paymentIntentId }).then(r => r.data);
+// For site-based deposits pass siteId; for direct/quick-search pass messageId instead.
+export const confirmDeposit = (siteId, paymentIntentId, messageId = null) =>
+  api.post('/contractor/deposit-confirmed', {
+    ...(messageId ? { messageId } : { siteId }),
+    paymentIntentId,
+  }).then(r => r.data);
 
 // Applications (trade pros who applied to contractor sites)
 export const getApplications      = () => api.get('/contractor/applications').then(r => r.data);

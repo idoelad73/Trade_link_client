@@ -34,8 +34,8 @@ function StarIcon({ fill }) {
   );
 }
 
-// Grade badge shown on each trade card — clickable to open reviews page
-function GradeBadge({ avg, count, tradeId, navigate }) {
+// Grade badge — clickable to open TradeFullInfoModal
+function GradeBadge({ avg, count, onOpen }) {
   if (!avg) return null;
   const rounded = roundHalf(avg);
 
@@ -48,27 +48,22 @@ function GradeBadge({ avg, count, tradeId, navigate }) {
   return (
     <button
       type="button"
-      onClick={() => navigate(`/dashboard/contractor/trade-reviews/${tradeId}`)}
+      onClick={onOpen}
       className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border transition hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer"
       style={{ background: COLOR.bg, borderColor: COLOR.border }}
-      title="View all reviews"
+      title="View trade profile"
     >
-      {/* Stars */}
       <div className="flex items-center gap-px">
         {[1, 2, 3, 4, 5].map((n) => {
           const fill = rounded >= n ? 'full' : rounded >= n - 0.5 ? 'half' : 'empty';
           return <StarIcon key={n} fill={fill} />;
         })}
       </div>
-      {/* Numeric value */}
       <span className="text-xs font-extrabold leading-none" style={{ color: COLOR.text }}>
         {rounded.toFixed(1)}
       </span>
-      {/* Review count */}
       {count > 0 && (
-        <span className="text-[10px] font-medium text-slate-400 leading-none">
-          ({count})
-        </span>
+        <span className="text-[10px] font-medium text-slate-400 leading-none">({count})</span>
       )}
     </button>
   );
@@ -99,7 +94,7 @@ const content = {
 };
 
 // ── Pro card ──────────────────────────────────────────────────────────────────
-function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, onOpenCalendar, navigate }) {
+function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, onOpenCalendar, onOpenProfile }) {
   const busy        = isBusyToday(pro.busyDays);
   const siteBooking = pro.bookings?.find((b) => b.siteName === siteName);
 
@@ -128,8 +123,8 @@ function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, o
         <div className="flex-1 min-w-0">
           <p className="font-bold text-slate-800 text-base truncate">{pro.fullName}</p>
           {pro.avgGrade
-            ? <div className="mt-0.5 mb-0.5"><GradeBadge avg={pro.avgGrade} count={pro.gradeCount ?? 0} tradeId={String(pro._id)} navigate={navigate} /></div>
-            : <p className="text-[10px] text-slate-300 italic mt-0.5">No reviews yet</p>
+            ? <div className="mt-0.5 mb-0.5"><GradeBadge avg={pro.avgGrade} count={pro.gradeCount ?? 0} onOpen={onOpenProfile} /></div>
+            : <button type="button" onClick={onOpenProfile} className="text-[10px] text-slate-300 italic mt-0.5 hover:text-sky-400 transition">View profile</button>
           }
           {siteBooking
             ? <p className="text-xs text-slate-400 truncate">📍 {pro.address}</p>
@@ -161,15 +156,6 @@ function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, o
         ) : (
           <span className="text-xs text-slate-300 italic">No rate</span>
         )}
-        {tradeEntry.budgetType === 'hours' && tradeEntry.totalHours && pro.hourlyRate && (() => {
-          const workers = slotsLeft ?? tradeEntry.workers_no ?? 1;
-          const total   = (tradeEntry.totalHours * workers * pro.hourlyRate).toFixed(2);
-          return (
-            <span className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-700 font-semibold px-2 py-0.5 rounded-lg">
-              {tradeEntry.totalHours}h × {workers} × ${pro.hourlyRate} = <span className="font-extrabold">${total}</span>
-            </span>
-          );
-        })()}
         <div className="ml-auto flex-shrink-0 flex items-center gap-2">
           {slotsLeft != null && !isFull && (
             <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full whitespace-nowrap">
@@ -210,17 +196,18 @@ export default function TradeSearchResultsPage() {
   const requiredDate = state?.requiredDate ?? null;
   const unit         = state?.unit         ?? 'mi';
   const mySiteNames  = state?.mySiteNames  ?? [];
+  const directSearch = state?.directSearch ?? false;
 
   const [calendarPro, setCalendarPro] = useState(null);
   const [slotsInfo,   setSlotsInfo]   = useState(null); // { workersLeft, isFull }
 
   // Fetch remaining worker slots for this trade+date (one call for the whole results page)
   useEffect(() => {
-    if (!siteId || !trade || !requiredDate) return;
+    if (directSearch || !siteId || !trade || !requiredDate) return;
     getWorkersLeft(siteId, trade, requiredDate)
       .then(setSlotsInfo)
-      .catch(() => {}); // silently ignore — slots badge is informational
-  }, [siteId, trade, requiredDate]);
+      .catch(() => {});
+  }, [directSearch, siteId, trade, requiredDate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-yellow-50 to-amber-50 font-sans text-slate-800">
@@ -269,10 +256,18 @@ export default function TradeSearchResultsPage() {
                 tradeEntry={tradeEntry}
                 slotsLeft={slotsInfo?.workersLeft ?? null}
                 isFull={slotsInfo?.isFull ?? false}
-                navigate={navigate}
                 onOpenCalendar={(proId) =>
-                  setCalendarPro({ proId, siteName, siteAddress, siteId, requiredDate, tradeName: trade, workersNo: tradeEntry.workers_no ?? 0 })
+                  setCalendarPro({
+                    proId,
+                    siteName:     directSearch ? '' : siteName,
+                    siteAddress:  directSearch ? '' : siteAddress,
+                    siteId:       directSearch ? null : siteId,
+                    requiredDate: directSearch ? null : requiredDate,
+                    tradeName:    trade,
+                    workersNo:    tradeEntry.workers_no ?? 0,
+                  })
                 }
+                onOpenProfile={() => navigate(`/dashboard/contractor/trade-profile/${pro._id}`)}
               />
             ))}
           </div>

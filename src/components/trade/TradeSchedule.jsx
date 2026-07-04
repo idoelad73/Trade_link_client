@@ -734,7 +734,8 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             date={activeBookedKey}
             siteName={bk.siteName}
             siteAddress={bk.siteAddress}
-            siteId={String(bk.siteId ?? '')}
+            siteId={bk.siteId ? String(bk.siteId) : ''}
+            contractorId={bk.contractorId ? String(bk.contractorId) : ''}
             professionality={professionality}
             hourlyRate={hourlyRate}
             totalHours={bk.totalHours ?? null}

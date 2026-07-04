@@ -97,6 +97,7 @@ export default function WorkingHoursModal({
   siteName,
   siteAddress,
   siteId,
+  contractorId,
   professionality,
   hourlyRate,
   totalHours,   // minimum hours required for this job (from site tradesNeeded)
@@ -219,10 +220,11 @@ export default function WorkingHoursModal({
     setResult('');
     try {
       const res = await submitWorkLog({
-        siteId,
+        siteId:       siteId || undefined,
+        contractorId: contractorId || undefined,
         date,
         totalSeconds: finalSec,
-        workers_no:   workers,   // server multiplies into order_sum
+        workers_no:   workers,
       });
       setResult(t.success);
       bgTimerRef.current = { acc: 0, start: null, bookingKey: null };

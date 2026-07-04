@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades, getSiteDepositSummary, getTradeTypes } from '../../api/contractor.js';
+import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades, getSiteDepositSummary } from '../../api/contractor.js';
+import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
 import ContractorInfoModal from '../../components/contractor/ContractorInfoModal.jsx';
 import AddSiteModal from '../../components/contractor/AddSiteModal.jsx';
 import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx';
@@ -395,6 +396,84 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
 
 const MAX_RATE = 300;
 
+// ── Trade typeahead search bar ────────────────────────────────────────────────
+function TradeSearchBar({ tradeTypes, tradeFilter, setTradeFilter, onSearch }) {
+  const [input, setInput]   = useState(tradeFilter);
+  const [open,  setOpen]    = useState(false);
+
+  const filtered = input.length > 0
+    ? tradeTypes.filter((t) => t.toLowerCase().startsWith(input.toLowerCase()))
+    : tradeTypes;
+
+  const select = (type) => {
+    setInput(type);
+    setTradeFilter(type);
+    setOpen(false);
+  };
+
+  const clear = () => {
+    setInput('');
+    setTradeFilter('');
+    setOpen(false);
+  };
+
+  return (
+    <div className="mb-5">
+      <div className="flex items-center justify-between mb-2">
+        <div>
+          <h3 className="text-sm font-bold text-slate-700">🔧 Trade Type</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Type to filter — select a trade then search</p>
+        </div>
+        {tradeFilter && (
+          <button onClick={clear} className="text-xs font-semibold text-slate-400 hover:text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100 transition">
+            ✕ Clear
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        {/* Typeahead input */}
+        <div className="relative flex-1 sm:max-w-xs">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => { setInput(e.target.value); setTradeFilter(''); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            placeholder="e.g. Painter, Plumber…"
+            className="w-full bg-white border-2 border-orange-100 focus:border-orange-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 outline-none transition placeholder:font-normal placeholder:text-slate-300"
+          />
+          {open && filtered.length > 0 && (
+            <div className="absolute top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg z-20 max-h-48 overflow-y-auto">
+              {filtered.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onMouseDown={() => select(type)}
+                  className={`w-full text-left px-3 py-2 text-sm font-medium transition hover:bg-orange-50 ${
+                    type === tradeFilter ? 'bg-orange-50 text-orange-600 font-semibold' : 'text-slate-700'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Search button */}
+        <button
+          onClick={onSearch}
+          disabled={!tradeFilter}
+          className="flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold px-5 py-2 rounded-xl shadow shadow-orange-200 transition-all active:scale-95 whitespace-nowrap"
+        >
+          🔍 Search for Trade
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Shared filters panel ─────────────────────────────────────────────────────
 function DistancePanel({ unit, setUnit, distance, setDistance, maxRate, setMaxRate, minRating, setMinRating, t }) {
   const kmValue     = Math.round(distance * 1.609);
@@ -531,7 +610,6 @@ export default function ContractorDashboard() {
   const [gradableTradesCount,  setGradableTradesCount]  = useState(0);    // for badge
   const [gradeLoading,         setGradeLoading]         = useState(false);
   const [tradeFilter,          setTradeFilter]          = useState('');
-  const [tradeTypes,           setTradeTypes]           = useState([]);
 
   const refreshApplicationCount = () =>
     getApplications()
@@ -604,7 +682,6 @@ export default function ContractorDashboard() {
         if (count) setGradableTrades(trades);
       })
       .catch(() => {});
-    getTradeTypes().then(setTradeTypes).catch(() => {});
   }, []);
 
   async function handleOpenGradeModal() {
@@ -658,7 +735,13 @@ export default function ContractorDashboard() {
     setSites((prev) => prev.map((s) => s._id === updatedSite._id ? updatedSite : s));
   };
 
-  const handleFind = async (site, trade) => {
+  const handleSearchForTrade = () => {
+    if (!tradeFilter) return;
+    const site = sites.find((s) => s.tradesNeeded?.some((tr) => tr.name === tradeFilter));
+    if (site) handleFind(site, tradeFilter, true);
+  };
+
+  const handleFind = async (site, trade, directSearch = false) => {
     setSelection(null);
     const tradeEntry = site.tradesNeeded.find((t) => t.name === trade) || {};
     setFindingFor({ siteId: site._id, trade });
@@ -672,9 +755,10 @@ export default function ContractorDashboard() {
           siteId:       site._id,
           trade,
           tradeEntry,
-          requiredDate: data.requiredDate ?? null,
+          requiredDate: directSearch ? null : (data.requiredDate ?? null),
           unit,
           mySiteNames:  sites.map((s) => s.name),
+          directSearch,
         },
       });
     } catch (err) {
@@ -892,17 +976,6 @@ export default function ContractorDashboard() {
 
         {activeView === 'allSites' && (
           <div>
-            <div className="flex items-center justify-between gap-3 mb-6">
-              <div>
-                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">{t.allSites.title}</h1>
-                <p className="text-slate-500 text-xs sm:text-sm mt-0.5">{t.allSites.subtitle(sites.length)}</p>
-              </div>
-              <button onClick={() => setOpenModal('addSite')}
-                className="flex-shrink-0 flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-sky-400 hover:from-amber-400 text-white text-xs sm:text-sm font-semibold px-3 sm:px-5 py-2 sm:py-2.5 rounded-2xl shadow shadow-amber-200 transition-all active:scale-[0.99]">
-                ➕ <span className="hidden xs:inline sm:inline">{t.allSites.addBtn}</span><span className="sm:hidden">Add</span>
-              </button>
-            </div>
-
             {sitesLoading ? (
               <div className="flex items-center justify-center py-20">
                 <div className="w-10 h-10 border-4 border-amber-300 border-t-amber-500 rounded-full animate-spin" />
@@ -919,40 +992,22 @@ export default function ContractorDashboard() {
               </div>
             ) : (
               <>
-                {/* ── Search filters (above grid) ──────────────────────────── */}
-                <div className="mb-6 bg-white/80 backdrop-blur-sm rounded-3xl border border-orange-100 shadow-md px-6 py-5">
+                {/* ── Section 1: Quick Trade Search ────────────────────────── */}
+                <div className="mb-2">
+                  <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">🔍 Quick Search for the Best Trades</h1>
+                  <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Type a trade and search across all your projects</p>
+                </div>
 
-                  {/* Trade type dropdown */}
-                  <div className="mb-5">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <h3 className="text-sm font-bold text-slate-700">🔧 Trade Type</h3>
-                        <p className="text-xs text-slate-400 mt-0.5">Filter projects and pre-select a trade</p>
-                      </div>
-                      {tradeFilter && (
-                        <button
-                          onClick={() => setTradeFilter('')}
-                          className="text-xs font-semibold text-slate-400 hover:text-slate-600 px-2 py-1 rounded-lg hover:bg-slate-100 transition"
-                        >
-                          ✕ Clear
-                        </button>
-                      )}
-                    </div>
-                    <select
-                      value={tradeFilter}
-                      onChange={(e) => setTradeFilter(e.target.value)}
-                      className="w-full sm:w-64 bg-white border-2 border-orange-100 focus:border-orange-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 appearance-none cursor-pointer outline-none transition"
-                    >
-                      <option value="">— All Trades —</option>
-                      {tradeTypes.map((type) => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="mb-6 bg-white/80 backdrop-blur-sm rounded-3xl border border-orange-100 shadow-md px-6 py-5">
+                  <TradeSearchBar
+                    tradeTypes={TRADE_PROFESSIONALITIES}
+                    tradeFilter={tradeFilter}
+                    setTradeFilter={setTradeFilter}
+                    onSearch={handleSearchForTrade}
+                  />
 
                   <div className="border-t border-slate-100 mb-5" />
 
-                  {/* Distance / rate / rating sliders */}
                   <DistancePanel
                     unit={unit} setUnit={setUnit}
                     distance={distance} setDistance={setDistance}
@@ -960,6 +1015,24 @@ export default function ContractorDashboard() {
                     minRating={minRating} setMinRating={setMinRating}
                     t={t.findTrade}
                   />
+                </div>
+
+                {/* ── Section 2: Search by Project ─────────────────────────── */}
+                <div className="mb-4">
+                  <h2 className="text-lg sm:text-xl font-extrabold text-slate-800">🏗️ Search for Trade by Project</h2>
+                  <p className="text-slate-500 text-xs sm:text-sm mt-0.5">Pick a trade on a project card and click Find</p>
+                </div>
+
+                {/* ── All Projects header + Add button ─────────────────────── */}
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-700">{t.allSites.title}</h3>
+                    <p className="text-slate-400 text-xs mt-0.5">{t.allSites.subtitle(sites.length)}</p>
+                  </div>
+                  <button onClick={() => setOpenModal('addSite')}
+                    className="flex-shrink-0 flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-sky-400 hover:from-amber-400 text-white text-xs sm:text-sm font-semibold px-3 sm:px-5 py-2 sm:py-2.5 rounded-2xl shadow shadow-amber-200 transition-all active:scale-[0.99]">
+                    ➕ <span className="hidden xs:inline sm:inline">{t.allSites.addBtn}</span><span className="sm:hidden">Add</span>
+                  </button>
                 </div>
 
                 {/* ── Project grid ─────────────────────────────────────────── */}

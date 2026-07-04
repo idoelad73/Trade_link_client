@@ -34,6 +34,7 @@ import ForgotPasswordPage from '../pages/ForgotPasswordPage';
 import ResetPasswordPage from '../pages/ResetPasswordPage';
 import MyReceiptsPage from '../pages/dashboard/MyReceiptsPage';
 import TradeReceiptsPage from '../pages/dashboard/TradeReceiptsPage';
+import TradeProfilePage from '../pages/dashboard/TradeProfilePage';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -54,6 +55,7 @@ const router = createBrowserRouter(
       <Route path="/dashboard/contractor/trade-search"        element={<TradeSearchResultsPage />} />
       <Route path="/dashboard/contractor/payment-approvals"  element={<PaymentApprovalsPage />} />
       <Route path="/dashboard/contractor/trade-reviews/:tradeId" element={<TradeReviewsPage />} />
+      <Route path="/dashboard/contractor/trade-profile/:tradeId" element={<TradeProfilePage />} />
       <Route path="/dashboard/contractor/receipts"              element={<MyReceiptsPage />} />
       <Route path="/dashboard/trade"                         element={<TradeDashboard />} />
       <Route path="/dashboard/trade/jobs"                  element={<JobResultsPage />} />

@@ -225,6 +225,17 @@ export default function PaymentApprovalsPage() {
           : `${order.actual_hours}h × $${order.hourly_rate}/hr`)
       : `${order.actual_hours} hrs`;
 
+    const depositHeld = order.min_deposit ?? 0;
+    const overageAmt  = parseFloat((order.order_sum - depositHeld).toFixed(2));
+    const depositLine = (depositHeld > 0 && overageAmt > 0)
+      ? `<div style="margin-top:10px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:8px 12px;text-align:left;">
+           <p style="font-size:11px;color:#7c3aed;margin:0 0 4px;font-weight:700;">💳 Deposit summary</p>
+           <p style="font-size:11px;color:#64748b;margin:0 0 2px;">Deposit held: <b style="color:#7c3aed;">$${depositHeld.toFixed(2)}</b></p>
+           <p style="font-size:11px;color:#64748b;margin:0 0 2px;">Actual total: <b style="color:#10b981;">$${order.order_sum.toFixed(2)}</b></p>
+           <p style="font-size:11px;color:#ef4444;margin:0;font-weight:700;">+$${overageAmt.toFixed(2)} above deposit — extra charge required</p>
+         </div>`
+      : `<p style="font-size:11px;color:#7c3aed;margin-top:6px;font-weight:600;">💳 Charged from deposit hold</p>`;
+
     const { isConfirmed } = await Swal.fire({
       title:              t.confirmTitle(pro?.fullName ?? ''),
       html: `
@@ -238,9 +249,7 @@ export default function PaymentApprovalsPage() {
           ${breakdownLine}
         </p>
         <p style="font-size:11px;color:#94a3b8;margin-top:2px;">${order.date}</p>
-        <p style="font-size:11px;color:#7c3aed;margin-top:6px;font-weight:600;">
-          💳 Charged from deposit hold (extra card required if total exceeds deposit)
-        </p>
+        ${depositLine}
       `,
       icon:               'question',
       showCancelButton:   true,

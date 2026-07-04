@@ -27,9 +27,20 @@ const content = {
     sendError:  'Failed to send. Please try again.',
     confirm: {
       title:    'Send Availability Request?',
-      body:     (date) => `You're about to send a request to this professional for:`,
+      body:     () => `You're about to send a request to this professional for:`,
       approve:  'Send Request',
       cancel:   'Cancel',
+    },
+    jobDetails: {
+      title:              'Job Details',
+      subtitle:           'Specify how many workers and total hours needed.',
+      workers:            'Number of Workers',
+      hours:              'Total Hours',
+      workersPlaceholder: 'e.g. 2',
+      hoursPlaceholder:   'e.g. 8',
+      send:               'Send Request',
+      cancel:             'Cancel',
+      validation:         'Please enter both workers and hours.',
     },
     toast:      (name) => `✅ Availability request sent to ${name}`,
   },
@@ -47,9 +58,20 @@ const content = {
     sendError:  'Error al enviar. Inténtalo de nuevo.',
     confirm: {
       title:    '¿Enviar solicitud de disponibilidad?',
-      body:     (date) => `Estás a punto de enviar una solicitud para:`,
+      body:     () => `Estás a punto de enviar una solicitud para:`,
       approve:  'Enviar Solicitud',
       cancel:   'Cancelar',
+    },
+    jobDetails: {
+      title:              'Detalles del Trabajo',
+      subtitle:           'Indica cuántos trabajadores y el total de horas necesarias.',
+      workers:            'Número de Trabajadores',
+      hours:              'Horas Totales',
+      workersPlaceholder: 'Ej. 2',
+      hoursPlaceholder:   'Ej. 8',
+      send:               'Enviar Solicitud',
+      cancel:             'Cancelar',
+      validation:         'Por favor ingresa trabajadores y horas.',
     },
     toast:      (name) => `✅ Solicitud enviada a ${name}`,
   },
@@ -91,11 +113,16 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
   const [loading,     setLoading]     = useState(true);
   const [fetchError,  setFetchError]  = useState(false);
   const [selectedKey, setSelectedKey] = useState(requiredDate ?? null);
-  const [sending,       setSending]       = useState(false);
-  const [sent,          setSent]          = useState(false);
-  const [sendError,     setSendError]     = useState('');
-  const [confirmOpen,   setConfirmOpen]   = useState(false);
-  const [duplicateInfo, setDuplicateInfo] = useState(null);
+  const [sending,          setSending]          = useState(false);
+  const [sent,             setSent]             = useState(false);
+  const [sendError,        setSendError]        = useState('');
+  const [confirmOpen,      setConfirmOpen]      = useState(false);
+  const [duplicateInfo,    setDuplicateInfo]    = useState(null);
+  // Direct-search job-details modal
+  const [jobDetailsOpen,   setJobDetailsOpen]   = useState(false);
+  const [inputWorkers,     setInputWorkers]     = useState(workersNo > 0 ? String(workersNo) : '1');
+  const [inputHours,       setInputHours]       = useState('');
+  const [jobDetailsError,  setJobDetailsError]  = useState('');
 
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose(); };
@@ -133,16 +160,21 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
 
   const handleAsk = () => {
     if (!selectedKey || sending || sent) return;
-    setConfirmOpen(true);
+    if (!siteId) {
+      // Direct / quick search — collect workers + hours before sending
+      setJobDetailsError('');
+      setJobDetailsOpen(true);
+    } else {
+      setConfirmOpen(true);
+    }
   };
 
-  const handleConfirm = async () => {
-    setConfirmOpen(false);
+  const _doSend = async (workers, hours) => {
     setSendError('');
     setDuplicateInfo(null);
     setSending(true);
     try {
-      await askAvailability(tradeId, selectedKey, siteName, siteAddress, lang, siteId, tradeName, 1);
+      await askAvailability(tradeId, selectedKey, siteName, siteAddress, lang, siteId, tradeName, workers, hours);
       setSent(true);
       toast.success(t.toast(pro?.fullName ?? ''), { duration: 5000 });
       setTimeout(onClose, 800);
@@ -160,6 +192,19 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
     } finally {
       setSending(false);
     }
+  };
+
+  const handleConfirm = async () => {
+    setConfirmOpen(false);
+    await _doSend(1, null);
+  };
+
+  const handleConfirmDirect = async () => {
+    const workers = Math.max(1, parseInt(inputWorkers) || 1);
+    const hours   = parseFloat(inputHours) || null;
+    if (!workers || !hours) { setJobDetailsError(t.jobDetails.validation); return; }
+    setJobDetailsOpen(false);
+    await _doSend(workers, hours);
   };
 
   return (
@@ -326,7 +371,7 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
       </div>
     </div>
 
-    {/* ── Confirmation mini-modal ─────────────────────────────── */}
+    {/* ── Confirmation mini-modal (site-based search) ─────────── */}
     {confirmOpen && (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-[2px]">
         <div className="w-full max-w-xs bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
@@ -356,6 +401,79 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
               className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition"
             >
               {t.confirm.cancel}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Job-details mini-modal (direct / quick search only) ──── */}
+    {jobDetailsOpen && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-[2px]">
+        <div className="w-full max-w-xs bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+
+          <div className="h-1 w-full bg-gradient-to-r from-sky-400 to-emerald-400" />
+
+          <div className="px-6 pt-6 pb-2 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-sky-50 border border-sky-100 flex items-center justify-center text-2xl mx-auto mb-3">👷</div>
+            <h3 className="text-base font-extrabold text-slate-800 mb-1">{t.jobDetails.title}</h3>
+            <p className="text-xs text-slate-400 mb-3">{t.jobDetails.subtitle}</p>
+
+            {/* Selected date chip */}
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 mb-4">
+              <p className="text-sm font-bold text-amber-700">📅 {selectedKey && formatDisplay(selectedKey, lang)}</p>
+            </div>
+
+            {/* Inputs */}
+            <div className="space-y-3 text-left mb-2">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">{t.jobDetails.workers}</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={inputWorkers}
+                  onChange={(e) => { setInputWorkers(e.target.value); setJobDetailsError(''); }}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300"
+                  placeholder={t.jobDetails.workersPlaceholder}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">{t.jobDetails.hours}</label>
+                <input
+                  type="number"
+                  min="0.5"
+                  step="0.5"
+                  value={inputHours}
+                  onChange={(e) => { setInputHours(e.target.value); setJobDetailsError(''); }}
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 text-center focus:outline-none focus:ring-2 focus:ring-sky-300 focus:border-sky-300"
+                  placeholder={t.jobDetails.hoursPlaceholder}
+                />
+              </div>
+              {jobDetailsError && (
+                <p className="text-xs font-semibold text-red-500 text-center">{jobDetailsError}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="px-6 pb-6 flex gap-2 mt-2">
+            <button
+              onClick={handleConfirmDirect}
+              disabled={sending}
+              className="flex-1 bg-gradient-to-r from-sky-500 to-sky-400 hover:from-sky-400 text-white font-bold py-2.5 rounded-xl text-sm shadow shadow-sky-200 transition-all active:scale-[0.98] disabled:opacity-50"
+            >
+              {sending ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  {t.asking}
+                </span>
+              ) : t.jobDetails.send}
+            </button>
+            <button
+              onClick={() => setJobDetailsOpen(false)}
+              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition"
+            >
+              {t.jobDetails.cancel}
             </button>
           </div>
         </div>

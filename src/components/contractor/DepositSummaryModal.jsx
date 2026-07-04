@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { createDepositIntent } from '../../api/stripe.js';
 import StripePaymentModal from './StripePaymentModal.jsx';
 
-export default function DepositSummaryModal({ siteId, siteName, rows, total, onClose, onSuccess }) {
+// messageId is set for direct/quick-search deposits (no siteId); siteId for regular flow.
+export default function DepositSummaryModal({ siteId, messageId, siteName, rows, total, onClose, onSuccess }) {
   const [loading,      setLoading]      = useState(false);
   const [stripeData,   setStripeData]   = useState(null); // { clientSecret, amount }
   const [errorMsg,     setErrorMsg]     = useState('');
@@ -12,7 +13,7 @@ export default function DepositSummaryModal({ siteId, siteName, rows, total, onC
     setLoading(true);
     setErrorMsg('');
     try {
-      const data = await createDepositIntent(siteId, total);
+      const data = await createDepositIntent(siteId, total, messageId || null);
       setStripeData(data);
     } catch (err) {
       setErrorMsg(err?.response?.data?.message ?? 'Failed to initialize payment. Please try again.');
@@ -26,7 +27,8 @@ export default function DepositSummaryModal({ siteId, siteName, rows, total, onC
         clientSecret={stripeData.clientSecret}
         amount={stripeData.amount}
         tradeName={siteName}
-        orderId={siteId}
+        orderId={messageId || siteId}
+        messageId={messageId || null}
         onClose={onClose}
         onSuccess={onSuccess}
         isDeposit

@@ -21,6 +21,17 @@ export const getPaymentApprovedCount = ()  => api.get('/trade/payment-approved/c
 // Returns { orders: [...approved], rejected: [...rejectedNotices] }
 export const getPaymentApproved      = ()  => api.get('/trade/payment-approved').then(r => r.data);
 
+// Working hours & portfolio photos
+export const updateWorkingHours = (workingHours) =>
+  api.patch('/trade/working-hours', { workingHours }).then(r => r.data.workingHours);
+export const addPortfolioPhoto = (file) => {
+  const fd = new FormData();
+  fd.append('photo', file);
+  return api.post('/trade/portfolio-photos', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data.portfolioPhotos);
+};
+export const deletePortfolioPhoto = (index) =>
+  api.delete(`/trade/portfolio-photos/${index}`).then(r => r.data.portfolioPhotos);
+
 // Contractor grading
 export const getGradableContractors     = () => api.get('/trade/contractor-grades/eligible').then(r => r.data.contractors);
 export const submitContractorGrade      = (contractor_id, site_id, order_id, trade_grade, review_text, photos) =>
