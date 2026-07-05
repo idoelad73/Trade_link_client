@@ -20,6 +20,7 @@ const content = {
       text:    'Create a free Contractor account to hire trade professionals and manage your projects.',
       confirm: 'Register now →',
       cancel:  'Maybe later',
+      login:   'Log in',
     },
   },
   es: {
@@ -36,6 +37,7 @@ const content = {
       text:    'Crea una cuenta gratuita de Contratista para contratar profesionales y gestionar tus proyectos.',
       confirm: 'Registrarme →',
       cancel:  'Quizás luego',
+      login:   'Iniciar sesión',
     },
   },
 };
@@ -50,11 +52,14 @@ export default function TradesShowcase() {
       icon: 'info',
       title: t.popup.title,
       text:  t.popup.text,
-      confirmButtonText: t.popup.confirm,
-      showCancelButton:  true,
-      cancelButtonText:  t.popup.cancel,
+      confirmButtonText:  t.popup.confirm,
+      showCancelButton:   true,
+      cancelButtonText:   t.popup.cancel,
+      showDenyButton:     true,
+      denyButtonText:     `🔑 ${t.popup.login}`,
       confirmButtonColor: '#0ea5e9',
       cancelButtonColor:  '#94a3b8',
+      denyButtonColor:    '#7c3aed',
       background: '#ffffff',
       customClass: {
         popup:         'rounded-3xl shadow-2xl',
@@ -62,10 +67,12 @@ export default function TradesShowcase() {
         htmlContainer: 'text-slate-500',
         confirmButton: 'rounded-xl font-bold px-6',
         cancelButton:  'rounded-xl font-semibold px-6',
+        denyButton:    'rounded-xl font-bold px-6',
       },
       buttonsStyling: true,
     });
     if (result.isConfirmed) navigate('/register/contractor');
+    if (result.isDenied)    useUIStore.getState().openModal('loginContractor');
   };
 
   const [pros,    setPros]    = useState([]);
