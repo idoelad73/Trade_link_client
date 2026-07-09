@@ -40,6 +40,11 @@ export const getWorkersLeft = (siteId, tradeName, date) =>
 export const getSiteDepositSummary = (siteId) =>
   api.get(`/contractor/sites/${siteId}/deposit-summary`).then(r => r.data);
 
+// Approved worker offers/applications awaiting a deposit that was never finished
+// (e.g. contractor closed the tab before completing Stripe checkout).
+export const getPendingDeposits = () =>
+  api.get('/contractor/pending-deposits').then(r => r.data.pending);
+
 // For site-based deposits pass siteId; for direct/quick-search pass messageId instead.
 export const confirmDeposit = (siteId, paymentIntentId, messageId = null) =>
   api.post('/contractor/deposit-confirmed', {

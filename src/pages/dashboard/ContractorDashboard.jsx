@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades, getSiteDepositSummary } from '../../api/contractor.js';
+import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades, getSiteDepositSummary, getPendingDeposits } from '../../api/contractor.js';
 import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
 import ContractorInfoModal from '../../components/contractor/ContractorInfoModal.jsx';
 import AddSiteModal from '../../components/contractor/AddSiteModal.jsx';
@@ -605,6 +605,7 @@ export default function ContractorDashboard() {
   const [applicationsOpen,     setApplicationsOpen]     = useState(false);
   const [applicationsCount,    setApplicationsCount]    = useState(0);
   const [depositData,          setDepositData]          = useState(null); // { siteId, siteName, rows, total }
+  const [pendingDeposits,      setPendingDeposits]      = useState([]);   // approved-but-unpaid deposits (stuck flow)
   const [pendingPayments,      setPendingPayments]      = useState(0);
   const [gradableTrades,       setGradableTrades]       = useState(null); // null = modal closed
   const [gradableTradesCount,  setGradableTradesCount]  = useState(0);    // for badge
@@ -624,6 +625,11 @@ export default function ContractorDashboard() {
   const refreshPaymentCount = () =>
     getPaymentApprovalsCount()
       .then((n) => setPendingPayments(n))
+      .catch(() => {});
+
+  const refreshPendingDeposits = () =>
+    getPendingDeposits()
+      .then((pending) => setPendingDeposits(pending))
       .catch(() => {});
 
   const checkAndShowDeposit = (normalized) => {
@@ -675,6 +681,7 @@ export default function ContractorDashboard() {
   useEffect(() => {
     refreshApplicationCount();
     refreshPaymentCount();
+    refreshPendingDeposits();
     getGradableTrades()
       .then(trades => {
         const count = trades?.length ?? 0;
@@ -974,6 +981,42 @@ export default function ContractorDashboard() {
 
       <main className="max-w-6xl mx-auto px-3 sm:px-6 py-6 sm:py-10">
 
+        {/* Stuck-deposit banner — approved jobs where the Stripe deposit was never completed */}
+        {pendingDeposits.length > 0 && (
+          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-2xl px-4 sm:px-5 py-4 space-y-3">
+            <p className="text-sm font-bold text-amber-700 flex items-center gap-2">
+              ⚠️ {pendingDeposits.length} job{pendingDeposits.length !== 1 ? 's' : ''} waiting on a deposit
+            </p>
+            <p className="text-xs text-amber-600 -mt-2">
+              You approved these trades but never finished the deposit payment. The trade professional can't start work until this is completed.
+            </p>
+            <div className="space-y-2">
+              {pendingDeposits.map((group) => (
+                <div key={group.key} className="flex items-center justify-between gap-3 bg-white border border-amber-100 rounded-xl px-4 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-700 truncate">{group.siteName || 'Direct Request'}</p>
+                    <p className="text-xs text-slate-400 truncate">
+                      {group.rows.map((r) => r.tradeProName).join(', ')} · ${group.total.toFixed(2)} deposit
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setDepositData({
+                      siteId:    group.siteId,
+                      messageId: group.messageId,
+                      siteName:  group.siteName,
+                      rows:      group.rows,
+                      total:     group.total,
+                    })}
+                    className="flex-shrink-0 text-xs font-bold px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-white shadow-sm shadow-amber-200 transition active:scale-95"
+                  >
+                    ✓ Approve
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {activeView === 'allSites' && (
           <div>
             {sitesLoading ? (
@@ -1092,6 +1135,7 @@ export default function ContractorDashboard() {
       {depositData && (
         <DepositSummaryModal
           siteId={depositData.siteId}
+          messageId={depositData.messageId}
           siteName={depositData.siteName}
           rows={depositData.rows}
           total={depositData.total}
@@ -1099,6 +1143,7 @@ export default function ContractorDashboard() {
           onSuccess={() => {
             console.log('[deposit-modal] onSuccess fired — clearing modal and refreshing sites');
             setDepositData(null);
+            refreshPendingDeposits();
             refreshSites().then(() => console.log('[deposit-modal] refreshSites done — trade card should now be green'));
           }}
         />

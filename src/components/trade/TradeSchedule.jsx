@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMe, updateSchedule, findJobs, requestReschedule, removeBooking, getTradeChatBySite, uploadChatFile as tradeUploadChatFile, checkWorkLog } from '../../api/trade.js';
+import { getMe, updateSchedule, findJobs, requestReschedule, removeBooking, getTradeChatBySite, uploadChatFile as tradeUploadChatFile, checkWorkLog, getDepositStatus } from '../../api/trade.js';
 import useUIStore from '../../stores/uiStore.js';
 import useAuthStore from '../../stores/authStore.js';
 import { toast } from '../../utils/toast.js';
@@ -159,7 +159,7 @@ function buildCalendar(year, month) {
   return cells;
 }
 
-export default function TradeSchedule({ initialBusyDays = [], initialBookings = [], approvedDates = [], approvedOrders = [], professionality = '', hourlyRate = null }) {
+export default function TradeSchedule({ initialBusyDays = [], initialBookings = [], approvedDates = [], approvedOrders = [], depositedRequests = [], professionality = '', hourlyRate = null }) {
   const navigate = useNavigate();
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
@@ -218,6 +218,12 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   const approvedOrderSet = new Set(
     approvedOrders.map(o => `${o.siteId}_${o.date}`)
   );
+
+  // Fast lookup: "contractorId_date" → true for every held direct-search deposit.
+  // Used to colour a direct-search booked day amber (awaiting deposit) vs red (deposit held).
+  const depositedSet = new Set(
+    depositedRequests.map(d => `${d.contractorId}_${d.date}`)
+  );
   const [dirty,    setDirty]    = useState(false);
   const [saving,   setSaving]   = useState(false);
   const [saved,    setSaved]    = useState(false);
@@ -268,7 +274,21 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   useEffect(() => {
     if (!activeBookedKey) { setClockDisabled(false); return; }
     const bk = bookingDateMap[activeBookedKey];
-    if (!bk?.siteId) { setClockDisabled(false); return; }
+
+    // Direct/quick-search booking (no siteId) — clock stays disabled until the
+    // contractor's deposit is actually held, not just once the trade approves.
+    if (!bk?.siteId) {
+      if (!bk?.contractorId) { setClockDisabled(true); return; }
+
+      let cancelled = false;
+      setClockChecking(true);
+      setClockDisabled(true);
+      getDepositStatus(String(bk.contractorId), activeBookedKey)
+        .then(({ hasDeposit }) => { if (!cancelled) setClockDisabled(!hasDeposit); })
+        .catch(() => { if (!cancelled) setClockDisabled(true); })
+        .finally(() => { if (!cancelled) setClockChecking(false); });
+      return () => { cancelled = true; };
+    }
 
     const siteKey = `${String(bk.siteId)}_${activeBookedKey}`;
 
@@ -349,6 +369,10 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             const isOrder         = dbBooking?.status === 'order';
             const isApprovedOrder = isBooked && dbBooking?.siteId &&
               approvedOrderSet.has(`${String(dbBooking.siteId)}_${key}`);
+            // Direct/quick-search booking whose contractor hasn't held the deposit yet —
+            // stays amber (like a pending offer) instead of red (locked/confirmed).
+            const isDirectPendingDeposit = isBooked && !dbBooking?.siteId && dbBooking?.contractorId &&
+              !depositedSet.has(`${String(dbBooking.contractorId)}_${key}`);
             const isOff        = busyDays.has(key);
             const isToday      = key === todayKey;
             const isApplied    = appliedDates.has(key);
@@ -384,7 +408,9 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                   className={`relative w-full aspect-square rounded-xl ring-1 ring-black/25 text-sm font-semibold flex transition-all duration-150 active:scale-90 select-none overflow-hidden
                     ${isApprovedOrder
                       ? `items-center justify-center bg-sky-300 text-white shadow-sm shadow-sky-200 cursor-pointer ${activeBookedKey === key ? 'ring-2 ring-offset-1 ring-sky-500 scale-105' : 'hover:bg-sky-400'}`
-                      : isBooked
+                      : isDirectPendingDeposit
+                        ? `flex-col items-center justify-start pt-1 ring-amber-300 bg-amber-100 text-amber-700 shadow-sm shadow-amber-100 cursor-pointer ${activeBookedKey === key ? 'ring-2 ring-offset-1 ring-amber-400 scale-105' : 'hover:bg-amber-200'}`
+                        : isBooked
                         ? `flex-col items-center justify-start pt-1 ring-red-300 bg-red-100 text-red-700 shadow-sm shadow-red-100 cursor-pointer ${activeBookedKey === key ? 'ring-2 ring-offset-1 ring-red-400 scale-105' : 'hover:bg-red-200'}`
                         : isRescheduleNew
                           ? 'items-center justify-center bg-violet-500 text-white shadow-sm shadow-violet-200 ring-2 ring-violet-600 ring-offset-1 scale-105'
@@ -402,9 +428,9 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                   {isBooked && !isApprovedOrder ? (
                     /* ── Booked day: day number at top + site name below ── */
                     <>
-                      <span className="text-xs font-bold leading-none text-red-500">{day}</span>
+                      <span className={`text-xs font-bold leading-none ${isDirectPendingDeposit ? 'text-amber-600' : 'text-red-500'}`}>{day}</span>
                       {dbBooking?.siteName && (
-                        <span className="w-full px-0.5 mt-0.5 text-[7px] font-bold text-red-600 text-center leading-tight line-clamp-3 break-words">
+                        <span className={`w-full px-0.5 mt-0.5 text-[7px] font-bold text-center leading-tight line-clamp-3 break-words ${isDirectPendingDeposit ? 'text-amber-700' : 'text-red-600'}`}>
                           {dbBooking.siteName}
                         </span>
                       )}
@@ -495,6 +521,8 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
         {/* Booked-day action strip — appears when a red day is tapped */}
         {activeBookedKey && bookingDateMap[activeBookedKey] && (() => {
           const bk = bookingDateMap[activeBookedKey];
+          const isPendingDeposit = !bk.siteId && bk.contractorId &&
+            !depositedSet.has(`${String(bk.contractorId)}_${activeBookedKey}`);
 
           const handleRescheduleConfirm = async () => {
             if (!rescheduleNewKey || rescheduling) return;
@@ -532,13 +560,14 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
           return (
             <div className="mx-4 mb-3 space-y-2">
               {/* Main strip */}
-              <div className={`rounded-2xl border px-4 py-3 flex items-center gap-2 ${rescheduleMode ? 'bg-violet-50 border-violet-200' : 'bg-red-50 border-red-200'}`}>
+              <div className={`rounded-2xl border px-4 py-3 flex items-center gap-2 ${rescheduleMode ? 'bg-violet-50 border-violet-200' : isPendingDeposit ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-bold truncate ${rescheduleMode ? 'text-violet-700' : 'text-red-700'}`}>
-                    {rescheduleMode ? '📅 Pick a new date on the calendar' : `🔒 ${bk.siteName}`}
+                  <p className={`text-xs font-bold truncate ${rescheduleMode ? 'text-violet-700' : isPendingDeposit ? 'text-amber-700' : 'text-red-700'}`}>
+                    {rescheduleMode ? '📅 Pick a new date on the calendar' : `${isPendingDeposit ? '💳' : '🔒'} ${bk.siteName}`}
                   </p>
-                  {!rescheduleMode && bk.siteAddress && <p className="text-[10px] text-red-400 truncate mt-0.5">📍 {bk.siteAddress}</p>}
-                  {!rescheduleMode && <p className="text-[10px] text-red-400 mt-0.5">📅 {activeBookedKey}</p>}
+                  {!rescheduleMode && bk.siteAddress && <p className={`text-[10px] truncate mt-0.5 ${isPendingDeposit ? 'text-amber-400' : 'text-red-400'}`}>📍 {bk.siteAddress}</p>}
+                  {!rescheduleMode && <p className={`text-[10px] mt-0.5 ${isPendingDeposit ? 'text-amber-400' : 'text-red-400'}`}>📅 {activeBookedKey}</p>}
+                  {!rescheduleMode && isPendingDeposit && <p className="text-[10px] text-amber-500 font-semibold mt-0.5">Waiting for contractor's deposit</p>}
                   {rescheduleMode && <p className="text-[10px] text-violet-400 mt-0.5">Tap any green day above ↑</p>}
                 </div>
 
@@ -580,10 +609,12 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                 {(() => {
                   const isActive   = timerRunning && bgTimerRef.current.bookingKey === activeBookedKey;
                   const isDisabled = clockDisabled && !isActive; // never disable if timer is already running
+                  const isDirect   = !bookingDateMap[activeBookedKey]?.siteId;
                   const isApproved = activeBookedKey && bookingDateMap[activeBookedKey]?.siteId &&
                     approvedOrderSet.has(`${String(bookingDateMap[activeBookedKey].siteId)}_${activeBookedKey}`);
                   const title      = clockChecking  ? 'Checking…'
                                    : isApproved     ? 'Hours already approved for this day ✅'
+                                   : (isDisabled && isDirect) ? 'Waiting for contractor\'s deposit 💳'
                                    : isDisabled     ? 'Hours already submitted — awaiting approval 🕐'
                                    : isActive       ? 'Timer running — tap to open'
                                    :                  'Log working hours';

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getMe, updateLocation, getPaymentApprovedCount, getApprovedOrderDates, getGradableContractors } from '../../api/trade.js';
+import { getMe, updateLocation, getPaymentApprovedCount, getApprovedOrderDates, getDepositedRequests, getGradableContractors } from '../../api/trade.js';
 import { completeOnboarding, startOnboarding } from '../../api/tradeStripe.js';
 import { toast } from '../../utils/toast.js';
 import TradeInfoModal from '../../components/trade/TradeInfoModal.jsx';
@@ -53,6 +53,8 @@ export default function TradeDashboard() {
   const [paymentCount,        setPaymentCount]        = useState(0);
   // approvedOrders: [{ date, siteId }] — used to colour calendar light-blue + disable clock
   const [approvedOrders, setApprovedOrders] = useState([]);
+  // depositedRequests: [{ contractorId, date }] — direct-search bookings with a held deposit
+  const [depositedRequests, setDepositedRequests] = useState([]);
   const [gradeOpen,       setGradeOpen]       = useState(false);
   const [gradableContractors, setGradableContractors] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -61,6 +63,7 @@ export default function TradeDashboard() {
     getMe().then(setTradeData).catch(console.error).finally(() => setDataLoading(false));
     getPaymentApprovedCount().then(setPaymentCount).catch(() => {});
     getApprovedOrderDates().then(setApprovedOrders).catch(() => {});
+    getDepositedRequests().then(setDepositedRequests).catch(() => {});
     getGradableContractors().then(list => {
       setGradableContractors(list);
       if (list.length > 0) setGradeOpen(true); // auto-open on login if there are ungraded contractors
@@ -366,6 +369,7 @@ export default function TradeDashboard() {
                 initialBookings={tradeData?.bookings || []}
                 approvedDates={approvedDates}
                 approvedOrders={approvedOrders}
+                depositedRequests={depositedRequests}
                 professionality={tradeData?.professionality ?? ''}
                 hourlyRate={tradeData?.hourlyRate ?? null}
               />

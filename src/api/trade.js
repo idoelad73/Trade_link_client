@@ -16,6 +16,10 @@ export const getMyReceipts           = (params = {}) => api.get('/trade/receipts
 export const getMyOrders             = () => api.get('/trade/orders').then(r => r.data.orders);
 export const getApprovedOrderDates   = () => api.get('/trade/approved-orders').then(r => r.data.orders);
 export const checkWorkLog            = (siteId, date) => api.get(`/trade/work-log/check?siteId=${siteId}&date=${date}`).then(r => r.data);
+// Direct/quick-search bookings only (no siteId) — { hasDeposit: bool }
+export const getDepositStatus        = (contractorId, date) => api.get(`/trade/deposit-status?contractorId=${contractorId}&date=${date}`).then(r => r.data);
+// Bulk list of all held direct-search deposits — [{ contractorId, date }]
+export const getDepositedRequests    = () => api.get('/trade/deposited-requests').then(r => r.data.deposits);
 export const submitWorkLog           = (payload)  => api.post('/trade/work-log', payload).then(r => r.data);
 export const getPaymentApprovedCount = ()  => api.get('/trade/payment-approved/count').then(r => r.data.count);
 // Returns { orders: [...approved], rejected: [...rejectedNotices] }
