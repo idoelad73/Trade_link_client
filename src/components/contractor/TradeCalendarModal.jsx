@@ -140,6 +140,8 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
 
+  const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+
   const busySet    = new Set(pro?.busyDays ?? []);
   // bookingMap: date → booking entry (each booking can span multiple dates)
   const bookingMap = {};
@@ -150,8 +152,8 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
 
   const handleDayClick = (day) => {
     const key = toDateKey(year, month, day);
-    // Don't allow selecting a day that's already booked or manually off
-    if (bookingMap[key] || busySet.has(key)) return;
+    // Don't allow selecting a day in the past, already booked, or manually off
+    if (key < todayKey || bookingMap[key] || busySet.has(key)) return;
     setSelectedKey((prev) => prev === key ? null : key);
     setSent(false);
     setSendError('');
@@ -251,7 +253,11 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
             <>
               {/* Month nav */}
               <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-sky-500 to-sky-400">
-                <button onClick={prevMonth} className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white font-bold transition">‹</button>
+                <button
+                  onClick={prevMonth}
+                  disabled={isCurrentMonth}
+                  className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-white font-bold transition"
+                >‹</button>
                 <h3 className="text-white font-extrabold text-base tracking-tight">{MONTHS[lang][month]} {year}</h3>
                 <button onClick={nextMonth} className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white font-bold transition">›</button>
               </div>
@@ -277,10 +283,20 @@ export default function TradeCalendarModal({ tradeId, siteName, siteAddress, sit
                 {cells.map((day, i) => {
                   if (!day) return <div key={`e-${i}`} />;
                   const key        = toDateKey(year, month, day);
+                  const isPast     = key < todayKey;
                   const booking    = bookingMap[key];
                   const isOff      = busySet.has(key);
                   const isToday    = key === todayKey;
                   const isSelected = key === selectedKey;
+
+                  if (isPast) {
+                    return (
+                      <div key={key} className="w-full aspect-square rounded-xl bg-slate-100 flex items-center justify-center text-xs text-slate-300 font-medium select-none">
+                        {day}
+                      </div>
+                    );
+                  }
+
                   return (
                     <div key={key} className="relative group">
                       <button
