@@ -284,7 +284,7 @@ export default function ContractorRegister() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-yellow-50 to-amber-50 font-sans text-slate-800 overflow-x-hidden">
-      <Navbar />
+      <Navbar showLogin />
 
       <div className="max-w-2xl mx-auto px-6 py-12">
         {/* Header */}
@@ -460,7 +460,7 @@ export default function ContractorRegister() {
 
           <p className="text-center text-sm text-slate-400 pt-1">
             {t.loginPrompt}{' '}
-            <button type="button" onClick={() => navigate('/login')} className="text-amber-500 font-semibold hover:underline">
+            <button type="button" onClick={() => openModal('loginContractor')} className="text-amber-500 font-semibold hover:underline">
               {t.login}
             </button>
           </p>

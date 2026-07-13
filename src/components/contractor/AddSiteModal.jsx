@@ -4,6 +4,34 @@ import useUIStore from '../../stores/uiStore.js';
 import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
 import api from '../../api/axios.js';
 
+const DAYS = {
+  en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+  es: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'],
+};
+const MONTHS = {
+  en: ['January','February','March','April','May','June','July','August','September','October','November','December'],
+  es: ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'],
+};
+
+function toDateKey(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function buildCalendar(year, month) {
+  const firstDay    = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  return cells;
+}
+
+function formatDisplay(dateKey, lang) {
+  return new Date(dateKey + 'T12:00:00').toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', {
+    weekday: 'short', year: 'numeric', month: 'long', day: 'numeric',
+  });
+}
+
 /* ── inline address autocomplete (Photon / OpenStreetMap, no API key) ── */
 function fmtAddr(p) {
   const parts = [];
@@ -158,9 +186,16 @@ const content = {
       typeHours:  '⏱️ Total Hours',
       amountHint: 'Max amount ($)',
       hoursHint:  'Total hours',
-      add:        'Add Trade',
-      skip:       'Skip',
+      next:       'Next: Pick Date →',
+      skip:       'No budget',
       cancel:     'Cancel',
+    },
+    datePick: {
+      badge:   '📅 Required Date',
+      title:   (name) => `Start date for ${name}`,
+      hint:    'Tap a day to select the required start date',
+      confirm: 'Add Trade',
+      cancel:  'Cancel',
     },
   },
   es: {
@@ -192,9 +227,16 @@ const content = {
       typeHours:  '⏱️ Horas Totales',
       amountHint: 'Monto máximo ($)',
       hoursHint:  'Total de horas',
-      add:        'Agregar Oficio',
-      skip:       'Omitir',
+      next:       'Siguiente: Elegir Fecha →',
+      skip:       'Sin presupuesto',
       cancel:     'Cancelar',
+    },
+    datePick: {
+      badge:   '📅 Fecha Requerida',
+      title:   (name) => `Fecha de inicio para ${name}`,
+      hint:    'Toca un día para seleccionar la fecha de inicio requerida',
+      confirm: 'Agregar Oficio',
+      cancel:  'Cancelar',
     },
   },
 };
@@ -210,32 +252,55 @@ function BudgetBadge({ trade }) {
   return null;
 }
 
+function DateBadge({ trade }) {
+  if (!trade.requiredDate) return null;
+  return <span className="ml-1 text-[10px] font-bold text-sky-600 bg-sky-50 border border-sky-200 px-1 py-0.5 rounded">📅 {trade.requiredDate}</span>;
+}
+
 export default function AddSiteModal({ onClose, onCreated }) {
   const lang = useUIStore((s) => s.lang);
   const t = content[lang];
   const tb = t.budget;
+  const td = t.datePick;
+
+  const today    = new Date();
+  const todayKey = toDateKey(today.getFullYear(), today.getMonth(), today.getDate());
 
   const photoInputRef = useRef();
   const [form,         setForm]         = useState({ name: '', type: '', address: '' });
-  const [trades,       setTrades]       = useState([]); // [{name, assigned, budgetType, maxAmount, totalHours}]
+  const [trades,       setTrades]       = useState([]); // [{name, assigned, budgetType, maxAmount, totalHours, requiredDate}]
   const [photoFile,    setPhotoFile]    = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState('');
 
-  // budget mini-modal
+  // budget mini-modal (step 1)
   const [pendingTrade,  setPendingTrade]  = useState(null);
   const [budgetType,    setBudgetType]    = useState('amount');
   const [budgetValue,   setBudgetValue]   = useState('');
   const [workersValue,  setWorkersValue]  = useState('');
 
+  // date picker mini-modal (step 2)
+  const [pendingDateEntry, setPendingDateEntry] = useState(null);
+  const [dateViewYear,  setDateViewYear]  = useState(today.getFullYear());
+  const [dateViewMonth, setDateViewMonth] = useState(today.getMonth());
+  const [selectedDate,  setSelectedDate]  = useState(null);
+
+  const maxDateMonth   = today.getMonth() === 11 ? 0  : today.getMonth() + 1;
+  const maxDateYear    = today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear();
+  const isDateMaxMonth = dateViewYear === maxDateYear  && dateViewMonth === maxDateMonth;
+  const isDateMinMonth = dateViewYear === today.getFullYear() && dateViewMonth === today.getMonth();
+
   useEffect(() => {
     const h = (e) => {
-      if (e.key === 'Escape') { if (pendingTrade) setPendingTrade(null); else onClose(); }
+      if (e.key !== 'Escape') return;
+      if (pendingDateEntry) { setPendingDateEntry(null); return; }
+      if (pendingTrade)     { setPendingTrade(null);     return; }
+      onClose();
     };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [onClose, pendingTrade]);
+  }, [onClose, pendingTrade, pendingDateEntry]);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
@@ -251,7 +316,7 @@ export default function AddSiteModal({ onClose, onCreated }) {
     }
   };
 
-  const confirmAdd = (skip = false) => {
+  const confirmBudget = (skip = false) => {
     const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null, workers_no: null };
     if (!skip && budgetValue) {
       const num = parseFloat(budgetValue);
@@ -263,8 +328,18 @@ export default function AddSiteModal({ onClose, onCreated }) {
     }
     const w = parseInt(workersValue);
     if (!isNaN(w) && w > 0) entry.workers_no = w;
-    setTrades((prev) => [...prev, entry]);
     setPendingTrade(null);
+    setPendingDateEntry(entry);
+    setSelectedDate(null);
+    setDateViewYear(today.getFullYear());
+    setDateViewMonth(today.getMonth());
+  };
+
+  const confirmWithDate = () => {
+    if (!selectedDate) return;
+    setTrades((prev) => [...prev, { ...pendingDateEntry, requiredDate: selectedDate }]);
+    setPendingDateEntry(null);
+    setSelectedDate(null);
   };
 
   const handlePhoto = (e) => {
@@ -303,7 +378,7 @@ export default function AddSiteModal({ onClose, onCreated }) {
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-        onClick={(e) => e.target === e.currentTarget && !pendingTrade && onClose()}>
+        onClick={(e) => e.target === e.currentTarget && !pendingTrade && !pendingDateEntry && onClose()}>
         <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
 
           <div className="h-1.5 w-full bg-gradient-to-r from-sky-400 to-amber-400 flex-shrink-0" />
@@ -356,6 +431,7 @@ export default function AddSiteModal({ onClose, onCreated }) {
                       {active && <span className="mr-1">✓</span>}
                       {item}
                       {tradeObj && <BudgetBadge trade={tradeObj} />}
+                      {tradeObj && <DateBadge trade={tradeObj} />}
                     </button>
                   );
                 })}
@@ -402,7 +478,19 @@ export default function AddSiteModal({ onClose, onCreated }) {
 
             <div className="h-1 w-full bg-gradient-to-r from-emerald-400 to-violet-400" />
 
-            <div className="px-6 pt-5 pb-2">
+            <div className="flex items-center gap-2 px-6 pt-4 pb-0">
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] font-bold flex items-center justify-center">1</span>
+                <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wide">Budget</span>
+              </div>
+              <div className="flex-1 h-px bg-slate-200" />
+              <div className="flex items-center gap-1.5">
+                <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-400 text-[10px] font-bold flex items-center justify-center">2</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Date</span>
+              </div>
+            </div>
+
+            <div className="px-6 pt-4 pb-2">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">{tb.title}</p>
               <p className="text-base font-extrabold text-slate-800 mb-4">{pendingTrade}</p>
 
@@ -427,7 +515,7 @@ export default function AddSiteModal({ onClose, onCreated }) {
                   placeholder={budgetType === 'amount' ? tb.amountHint : tb.hoursHint}
                   className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-300 transition"
                   autoFocus
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmAdd(); } }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmBudget(false); } }}
                 />
               </div>
 
@@ -444,17 +532,98 @@ export default function AddSiteModal({ onClose, onCreated }) {
             </div>
 
             <div className="px-6 pb-5 flex gap-2">
-              <button type="button" onClick={() => confirmAdd(false)}
+              <button type="button" onClick={() => confirmBudget(false)}
                 className="flex-1 bg-gradient-to-r from-sky-500 to-sky-400 hover:from-sky-400 text-white font-semibold py-2.5 rounded-xl text-sm shadow shadow-sky-200 transition-all active:scale-[0.98]">
-                {tb.add}
+                {tb.next}
               </button>
-              <button type="button" onClick={() => confirmAdd(true)}
+              <button type="button" onClick={() => confirmBudget(true)}
                 className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition" title="Add without budget">
                 {tb.skip}
               </button>
               <button type="button" onClick={() => setPendingTrade(null)}
                 className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition">
                 {tb.cancel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Date picker mini-modal ───────────────────────────── */}
+      {pendingDateEntry && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/30 backdrop-blur-[2px]">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100">
+
+            <div className="h-1.5 w-full bg-gradient-to-r from-sky-400 to-emerald-400" />
+
+            <div className="px-6 pt-5 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-400 text-white text-[10px] font-bold flex items-center justify-center">✓</span>
+                  <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wide">Budget</span>
+                </div>
+                <div className="flex-1 h-px bg-sky-200" />
+                <div className="flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-sky-500 text-white text-[10px] font-bold flex items-center justify-center">2</span>
+                  <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wide">Date</span>
+                </div>
+              </div>
+              <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-sky-100 text-sky-700 border border-sky-200 mb-1.5">{td.badge}</div>
+              <h3 className="text-base font-extrabold text-slate-800">{td.title(pendingDateEntry.name)}</h3>
+            </div>
+
+            <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-sky-500 to-sky-400">
+              <button onClick={() => { if (isDateMinMonth) return; if (dateViewMonth === 0) { setDateViewYear(y => y-1); setDateViewMonth(11); } else setDateViewMonth(m => m-1); }}
+                disabled={isDateMinMonth}
+                className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-white font-bold transition">‹</button>
+              <h4 className="text-white font-extrabold text-sm tracking-tight">{MONTHS[lang][dateViewMonth]} {dateViewYear}</h4>
+              <button onClick={() => { if (isDateMaxMonth) return; if (dateViewMonth === 11) { setDateViewYear(y => y+1); setDateViewMonth(0); } else setDateViewMonth(m => m+1); }}
+                disabled={isDateMaxMonth}
+                className="w-8 h-8 rounded-xl bg-white/20 hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-white font-bold transition">›</button>
+            </div>
+
+            <div className="grid grid-cols-7 px-3 pt-2 pb-1">
+              {DAYS[lang].map((d) => <div key={d} className="text-center text-xs font-bold text-slate-400 uppercase tracking-wide py-1">{d}</div>)}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 px-3 pb-3">
+              {buildCalendar(dateViewYear, dateViewMonth).map((day, i) => {
+                if (!day) return <div key={`e-${i}`} />;
+                const key    = toDateKey(dateViewYear, dateViewMonth, day);
+                const isPast = new Date(dateViewYear, dateViewMonth, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                const isSel  = key === selectedDate;
+                if (isPast) return <div key={key} className="w-full aspect-square rounded-xl bg-slate-100 ring-1 ring-black/20 flex items-center justify-center text-xs text-slate-300 font-medium select-none">{day}</div>;
+                return (
+                  <button key={key} type="button" onClick={() => setSelectedDate((prev) => prev === key ? null : key)}
+                    className={`relative w-full aspect-square rounded-xl ring-1 ring-black/20 text-sm font-semibold flex items-center justify-center transition-all duration-150 active:scale-90 select-none
+                      ${isSel ? 'bg-amber-400 text-white shadow-md shadow-amber-200 scale-105 ring-2 ring-amber-500 ring-offset-1' : 'bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
+                      ${key === todayKey && !isSel ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}>
+                    {day}
+                    {key === todayKey && <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/80" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="px-4 pb-2">
+              {selectedDate ? (
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2.5">
+                  <span className="text-amber-500">📅</span>
+                  <span className="text-sm font-semibold text-amber-700">{formatDisplay(selectedDate, lang)}</span>
+                </div>
+              ) : (
+                <p className="text-center text-xs text-slate-400 py-1">{td.hint}</p>
+              )}
+            </div>
+
+            <div className="px-4 pb-5 pt-2 flex gap-2">
+              <button type="button" onClick={confirmWithDate} disabled={!selectedDate}
+                className="flex-1 bg-gradient-to-r from-sky-500 to-emerald-400 hover:from-sky-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 rounded-2xl text-sm shadow shadow-sky-200 transition-all active:scale-[0.98]">
+                {td.confirm}
+              </button>
+              <button type="button" onClick={() => setPendingDateEntry(null)}
+                className="px-5 py-3 rounded-2xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition">
+                {td.cancel}
               </button>
             </div>
           </div>

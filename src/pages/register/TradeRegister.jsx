@@ -85,6 +85,7 @@ const content = {
       stripeError:  'Bank account setup failed',
       dobRequired:  'Date of birth is required.',
       ssnRequired:  'Please enter the last 4 digits of your SSN.',
+      agreementRequired: 'Please agree to the Stripe Connected Account Agreement to continue.',
     },
     errors: {
       passwordMatch: 'Passwords do not match',
@@ -160,6 +161,7 @@ const content = {
       stripeError:  'La configuración de cuenta bancaria falló',
       dobRequired:  'La fecha de nacimiento es requerida.',
       ssnRequired:  'Por favor ingresa los últimos 4 dígitos de tu SSN.',
+      agreementRequired: 'Debes aceptar el Acuerdo de Cuenta Conectada de Stripe para continuar.',
     },
     errors: {
       passwordMatch: 'Las contraseñas no coinciden',
@@ -393,6 +395,7 @@ export default function TradeRegister() {
     routingNumber: '',
     accountNumber: '',
     confirmAcct:   '',
+    agreedToTerms: false,
   });
   const setBank = (field) => (e) => {
     // For numeric fields, strip any non-digit characters automatically
@@ -453,6 +456,9 @@ export default function TradeRegister() {
 
     // Bank validation (only when not skipped)
     if (!skipBank) {
+      if (!bankForm.agreedToTerms) {
+        return setError(t.bank.agreementRequired);
+      }
       if (!bankForm.dob) {
         return setError(t.bank.dobRequired);
       }
@@ -539,7 +545,7 @@ export default function TradeRegister() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-yellow-50 to-amber-50 font-sans text-slate-800 overflow-x-hidden">
-      <Navbar />
+      <Navbar showLogin />
 
       {/* Location consent modal */}
       {showLocationModal && (
@@ -918,7 +924,8 @@ export default function TradeRegister() {
               <label className="flex items-start gap-3 cursor-pointer group">
                 <input
                   type="checkbox"
-                  required
+                  checked={bankForm.agreedToTerms}
+                  onChange={(e) => setBankForm((b) => ({ ...b, agreedToTerms: e.target.checked }))}
                   className="mt-0.5 w-4 h-4 rounded border-slate-300 text-sky-500 accent-sky-500 flex-shrink-0"
                 />
                 <span className="text-[11px] text-slate-500 leading-relaxed">
@@ -1018,7 +1025,7 @@ export default function TradeRegister() {
 
           <p className="text-center text-sm text-slate-400 pt-1">
             {t.loginPrompt}{' '}
-            <button type="button" onClick={() => navigate('/login')} className="text-sky-500 font-semibold hover:underline">
+            <button type="button" onClick={() => openModal('loginTrade')} className="text-sky-500 font-semibold hover:underline">
               {t.login}
             </button>
           </p>

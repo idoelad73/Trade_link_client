@@ -61,7 +61,7 @@ export default function RegistrationArea() {
 
           {/* Contractors */}
           <div
-            onClick={() => navigate('/trades')}
+            onClick={() => navigate('/register/contractor')}
             className="flex-1 group bg-white/80 backdrop-blur-sm border-2 border-sky-200 hover:border-sky-400 rounded-3xl p-8 text-left shadow-md hover:shadow-xl transition-all duration-200 active:scale-95 cursor-pointer"
           >
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-sky-400 to-sky-300 flex items-center justify-center text-2xl mb-5 shadow group-hover:scale-110 transition-transform">
@@ -79,7 +79,7 @@ export default function RegistrationArea() {
 
           {/* Professional Trade */}
           <div
-            onClick={() => navigate('/projects')}
+            onClick={() => navigate('/register/trade')}
             className="flex-1 group bg-white/80 backdrop-blur-sm border-2 border-amber-200 hover:border-amber-400 rounded-3xl p-8 text-left shadow-md hover:shadow-xl transition-all duration-200 active:scale-95 cursor-pointer"
           >
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-300 flex items-center justify-center text-2xl mb-5 shadow group-hover:scale-110 transition-transform">
