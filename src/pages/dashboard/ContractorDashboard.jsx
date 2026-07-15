@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
 import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades, getSiteDepositSummary, getPendingDeposits } from '../../api/contractor.js';
@@ -263,7 +264,10 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
                 const isSelected    = selectedTrade === tr.name;
                 const isAssigned    = tr.assigned;
                 const hasWorkers    = tr.workers_no !== null && tr.workers_no !== undefined;
-                const isFull        = hasWorkers ? tr.workers_no <= 0 : isAssigned;
+                // workers_no is the FIXED TOTAL needed (never decremented) — `assigned` is the
+                // server-derived "fully staffed" flag (true once approved workers reach that
+                // total), so it's the only reliable signal that every slot has been filled.
+                const isFull        = isAssigned;
                 const isDepositHeld = tr.depositHeld === true;
                 const dateLabel     = fmtDate(tr.requiredDate);
                 return (
@@ -749,8 +753,23 @@ export default function ContractorDashboard() {
   };
 
   const handleFind = async (site, trade, directSearch = false) => {
-    setSelection(null);
     const tradeEntry = site.tradesNeeded.find((t) => t.name === trade) || {};
+
+    // Project-card search requires a required date on the trade slot before we can search
+    if (!directSearch && !tradeEntry.requiredDate) {
+      Swal.fire({
+        icon:  'warning',
+        title: lang === 'es' ? 'Falta la fecha' : 'Date required',
+        text:  lang === 'es'
+          ? 'Debes agregar una fecha requerida a este oficio antes de buscar.'
+          : 'Date must be added for trade search.',
+        confirmButtonColor: '#f59e0b',
+        customClass: { popup: 'rounded-3xl' },
+      });
+      return;
+    }
+
+    setSelection(null);
     setFindingFor({ siteId: site._id, trade });
     try {
       const data = await findTradesForSite(site._id, trade, distance, unit, maxRate < MAX_RATE ? maxRate : null, minRating > 0 ? minRating : null);

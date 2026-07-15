@@ -94,6 +94,7 @@ function currentBgSeconds(bgTimer) {
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function WorkingHoursModal({
   date,
+  bookingKey, // unique per site+date — distinguishes multiple bookings on the same day. Falls back to date.
   siteName,
   siteAddress,
   siteId,
@@ -113,11 +114,12 @@ export default function WorkingHoursModal({
   const user = useAuthStore((s) => s.user);
 
   const workers = (workersNo && workersNo > 0) ? workersNo : 1;
+  const timerKey = bookingKey ?? date; // distinguishes multiple sites booked on the same date
 
   // ── Local display interval (recreated on every open) ─────────────────────
   const intervalRef = useRef(null);
 
-  const isSameBooking = bgTimerRef.current.bookingKey === date;
+  const isSameBooking = bgTimerRef.current.bookingKey === timerKey;
   const [isRunning,      setIsRunning]      = useState(() => isSameBooking && bgTimerRef.current.start !== null);
   const [displaySeconds, setDisplaySeconds] = useState(() => isSameBooking ? currentBgSeconds(bgTimerRef.current) : 0);
 
@@ -126,7 +128,7 @@ export default function WorkingHoursModal({
       bgTimerRef.current = { acc: 0, start: null, bookingKey: null };
       setTimerRunning(false);
     }
-    bgTimerRef.current.bookingKey = date;
+    bgTimerRef.current.bookingKey = timerKey;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -148,7 +150,7 @@ export default function WorkingHoursModal({
   const handleStart = () => {
     if (isRunning) return;
     bgTimerRef.current.start = Date.now();
-    bgTimerRef.current.bookingKey = date;
+    bgTimerRef.current.bookingKey = timerKey;
     setIsRunning(true);
     setTimerRunning(true);
     intervalRef.current = setInterval(() => {

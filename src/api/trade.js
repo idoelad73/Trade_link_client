@@ -5,6 +5,7 @@ export const updateMe        = (data)       => api.patch('/trade/me', data).then
 export const updateSchedule  = (busyDays)   => api.patch('/trade/schedule', { busyDays }).then(r => r.data.busyDays);
 export const updateLocation  = (lat, lng)   => api.patch('/trade/location', { lat, lng });
 export const getMessages     = ()           => api.get('/trade/messages').then(r => r.data.messages);
+export const getScheduleBookings = ()       => api.get('/trade/schedule-bookings').then(r => r.data.bookings);
 export const approveMessage  = (id, workersOffered) => api.patch(`/trade/messages/${id}/approve`, { workersOffered }).then(r => r.data);
 export const findJobs        = (distance, unit) => api.get(`/trade/find-jobs?distance=${distance}&unit=${unit}`).then(r => r.data);
 export const applyToJob       = (siteId, lang, date, workers_no = 1) => api.post(`/trade/jobs/${siteId}/apply`, { lang, date, workers_no }).then(r => r.data);
@@ -16,8 +17,14 @@ export const getMyReceipts           = (params = {}) => api.get('/trade/receipts
 export const getMyOrders             = () => api.get('/trade/orders').then(r => r.data.orders);
 export const getApprovedOrderDates   = () => api.get('/trade/approved-orders').then(r => r.data.orders);
 export const checkWorkLog            = (siteId, date) => api.get(`/trade/work-log/check?siteId=${siteId}&date=${date}`).then(r => r.data);
-// Direct/quick-search bookings only (no siteId) — { hasDeposit: bool }
-export const getDepositStatus        = (contractorId, date) => api.get(`/trade/deposit-status?contractorId=${contractorId}&date=${date}`).then(r => r.data);
+// Works for both flows — pass { siteId, date } for site-based bookings or
+// { contractorId, date } for direct/quick-search bookings. { hasDeposit: bool }
+export const getDepositStatus = ({ siteId, contractorId, date }) => {
+  const params = new URLSearchParams({ date });
+  if (siteId) params.set('siteId', siteId);
+  else if (contractorId) params.set('contractorId', contractorId);
+  return api.get(`/trade/deposit-status?${params.toString()}`).then(r => r.data);
+};
 // Bulk list of all held direct-search deposits — [{ contractorId, date }]
 export const getDepositedRequests    = () => api.get('/trade/deposited-requests').then(r => r.data.deposits);
 export const submitWorkLog           = (payload)  => api.post('/trade/work-log', payload).then(r => r.data);

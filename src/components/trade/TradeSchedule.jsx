@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMe, updateSchedule, findJobs, requestReschedule, removeBooking, getTradeChatBySite, uploadChatFile as tradeUploadChatFile, checkWorkLog, getDepositStatus } from '../../api/trade.js';
+import Swal from 'sweetalert2';
+import { getMe, updateSchedule, findJobs, requestReschedule, removeBooking, getTradeChatBySite, uploadChatFile as tradeUploadChatFile, checkWorkLog, getDepositStatus, getScheduleBookings } from '../../api/trade.js';
 import useUIStore from '../../stores/uiStore.js';
 import useAuthStore from '../../stores/authStore.js';
 import { toast } from '../../utils/toast.js';
@@ -195,6 +196,11 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   const [liveBookings, setLiveBookings] = useState(initialBookings);
   const [bookingsReady, setBookingsReady] = useState(false);
 
+  // messageBookings: every date commitment for this trade pro, read live from
+  // the messages collection — unlike the bookings snapshot, this can hold more
+  // than one entry per date (different sites/contractors, different workers).
+  const [messageBookings, setMessageBookings] = useState([]);
+
   // ── Fetch fresh bookings from server on mount ──────────────────────────────
   useEffect(() => {
     getMe()
@@ -204,6 +210,9 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
       })
       .catch(() => {/* keep initialBookings as fallback */})
       .finally(() => setBookingsReady(true));
+    getScheduleBookings()
+      .then(setMessageBookings)
+      .catch(() => {/* calendar falls back to bookings-only display */});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Build a per-date map from LIVE bookings (handles both new { dates[], status } and legacy { date })
@@ -211,6 +220,14 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   liveBookings.forEach(b => {
     const ds = b.dates?.length ? b.dates : (b.date ? [b.date] : []);
     ds.forEach(d => { bookingDateMap[d] = b; });
+  });
+
+  // Group every message-sourced entry by date — one date can hold several
+  // entries (multiple sites/workers on the same day).
+  const messageDateMap = {};
+  messageBookings.forEach((m) => {
+    if (!m.date) return;
+    (messageDateMap[m.date] ||= []).push(m);
   });
 
   // Fast lookup: "siteId_date" → true  for every approved tradehours_order
@@ -236,27 +253,47 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   const [appliedDates, setAppliedDates] = useState(() => new Set()); // orange after apply
   const [pendingDates, setPendingDates] = useState(() => new Set()); // requiredDates from nearby jobs
   const [activeBookedKey,  setActiveBookedKey]  = useState(null);
-  const [chatOpen,         setChatOpen]         = useState(false);
+  const [chatOpen,         setChatOpen]         = useState(null);    // booking key (or null) of the row whose chat is open
   const [chatMessage,      setChatMessage]      = useState('');
   const [chatHistory,      setChatHistory]      = useState([]);
   const [chatContractorId, setChatContractorId] = useState('');
   const userId = useAuthStore((s) => s.user?._id ?? s.user?.id ?? '');
-  const [rescheduleMode,   setRescheduleMode]   = useState(false);   // calendar in reschedule-pick mode
-  const [rescheduleNewKey, setRescheduleNewKey] = useState(null);    // newly picked date key
-  const [rescheduling,     setRescheduling]     = useState(false);   // API in-flight
-  const [deleting,         setDeleting]         = useState(false);   // delete in-flight
-  const [workingHoursOpen, setWorkingHoursOpen] = useState(false);   // working-hours modal
+  const [rescheduleMode,    setRescheduleMode]    = useState(false); // calendar in reschedule-pick mode
+  const [rescheduleSiteKey, setRescheduleSiteKey] = useState(null);  // which row (site) is being rescheduled
+  const [rescheduleNewKey,  setRescheduleNewKey]  = useState(null);  // newly picked date key
+  const [rescheduling,      setRescheduling]      = useState(false); // API in-flight
+  const [deletingKey,       setDeletingKey]       = useState(null);  // booking key currently being deleted
+  const [workingHoursTargetKey, setWorkingHoursTargetKey] = useState(null); // booking key with the hours modal open
 
   // ── Background timer — persists while modal is closed ─────────────────────
   // Stores timestamps so we can recalculate elapsed time without a real background interval.
   const bgTimerRef = useRef({ acc: 0, start: null, bookingKey: null });
   const [timerRunning, setTimerRunning] = useState(false);  // drives clock-icon pulse
 
+  // Unique key per booking — a trade can have multiple bookings (different sites) on
+  // the same date, so date alone is not enough to identify one.
+  const bookingKeyOf = (bk) => bk.siteId ? `site:${bk.siteId}` : `direct:${bk.contractorId}`;
+
+  // Single source of truth for "which jobs are truly confirmed on this date" — driven by
+  // messageBookings (deduped worker_offer/application records), NOT raw TradePro.bookings,
+  // so a booking whose contractor-side confirmation never went through never appears here.
+  const getConfirmedBookingsAtDate = (key) =>
+    messageBookings
+      .filter(m => m.date === key && m.status === 'booked')
+      .map(m => ({
+        siteId:       m.siteId,
+        siteName:     m.siteName,
+        siteAddress:  m.siteAddress,
+        contractorId: m.contractorId,
+        workers_no:   m.workers,
+        totalHours:   m.totalHours,
+      }));
+
   // ── Clock-disabled check — queried from server when a booked day is tapped ─
   // Prevents opening the clock when a pending payment message already exists for
-  // this trade + site + date combination.
-  const [clockDisabled, setClockDisabled] = useState(false);
-  const [clockChecking, setClockChecking] = useState(false);
+  // this trade + site + date combination. Keyed per booking so multiple sites on
+  // the same day are tracked independently.
+  const [clockStatus, setClockStatus] = useState({}); // { [bookingKey]: { disabled, checking } }
 
   // Merge dates approved via the messages modal into the orange calendar set
   useEffect(() => {
@@ -268,45 +305,56 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
     });
   }, [approvedDates]);
 
-  // When a booked day is tapped, disable the clock if:
+  // When a booked day is tapped, check each row's clock independently against the
+  // server (messages collection) for:
   //   a) An approved tradehours_order already exists for this site+date  (client-side, instant)
-  //   b) A pending payment message exists for this site+date              (server check)
+  //   b) A deposit is actually held for this job — required for BOTH site-based AND
+  //      direct-search bookings. No-deposit does NOT grey out the clock; it stays
+  //      clickable so tapping it can explain why via a SweetAlert2 popup instead of
+  //      silently doing nothing.
+  //   c) A pending payment message already exists for this site+date (site-based only)
   useEffect(() => {
-    if (!activeBookedKey) { setClockDisabled(false); return; }
-    const bk = bookingDateMap[activeBookedKey];
-
-    // Direct/quick-search booking (no siteId) — clock stays disabled until the
-    // contractor's deposit is actually held, not just once the trade approves.
-    if (!bk?.siteId) {
-      if (!bk?.contractorId) { setClockDisabled(true); return; }
-
-      let cancelled = false;
-      setClockChecking(true);
-      setClockDisabled(true);
-      getDepositStatus(String(bk.contractorId), activeBookedKey)
-        .then(({ hasDeposit }) => { if (!cancelled) setClockDisabled(!hasDeposit); })
-        .catch(() => { if (!cancelled) setClockDisabled(true); })
-        .finally(() => { if (!cancelled) setClockChecking(false); });
-      return () => { cancelled = true; };
-    }
-
-    const siteKey = `${String(bk.siteId)}_${activeBookedKey}`;
-
-    // (a) Already approved — disable immediately, no round-trip needed
-    if (approvedOrderSet.has(siteKey)) {
-      setClockDisabled(true);
-      setClockChecking(false);
-      return;
-    }
-
-    // (b) Check for a pending payment message on the server
+    if (!activeBookedKey) { setClockStatus({}); return; }
+    const bookings = getConfirmedBookingsAtDate(activeBookedKey);
     let cancelled = false;
-    setClockChecking(true);
-    setClockDisabled(false);
-    checkWorkLog(String(bk.siteId), activeBookedKey)
-      .then(({ hasPending }) => { if (!cancelled) setClockDisabled(hasPending); })
-      .catch(() => { if (!cancelled) setClockDisabled(false); })
-      .finally(() => { if (!cancelled) setClockChecking(false); });
+
+    bookings.forEach((bk) => {
+      const key = bookingKeyOf(bk);
+
+      // (a) Already approved — disable immediately, no round-trip needed
+      if (bk.siteId && approvedOrderSet.has(`${String(bk.siteId)}_${activeBookedKey}`)) {
+        setClockStatus((prev) => ({ ...prev, [key]: { disabled: true, checking: false, reason: 'approved' } }));
+        return;
+      }
+
+      if (!bk.siteId && !bk.contractorId) {
+        setClockStatus((prev) => ({ ...prev, [key]: { disabled: false, checking: false, reason: 'no_deposit' } }));
+        return;
+      }
+
+      // (b) Deposit check — server call against the messages collection
+      setClockStatus((prev) => ({ ...prev, [key]: { disabled: false, checking: true, reason: null } }));
+      getDepositStatus({ siteId: bk.siteId || null, contractorId: bk.contractorId || null, date: activeBookedKey })
+        .then(({ hasDeposit }) => {
+          if (cancelled) return;
+          if (!hasDeposit) {
+            setClockStatus((prev) => ({ ...prev, [key]: { disabled: false, checking: false, reason: 'no_deposit' } }));
+            return;
+          }
+          // Deposit confirmed — (c) site-based bookings still need the pending-submission check
+          if (bk.siteId) {
+            checkWorkLog(String(bk.siteId), activeBookedKey)
+              .then(({ hasPending }) => { if (!cancelled) setClockStatus((prev) => ({ ...prev, [key]: { disabled: hasPending, checking: false, reason: hasPending ? 'pending_submission' : null } })); })
+              .catch(() => { if (!cancelled) setClockStatus((prev) => ({ ...prev, [key]: { disabled: false, checking: false, reason: null } })); });
+          } else {
+            setClockStatus((prev) => ({ ...prev, [key]: { disabled: false, checking: false, reason: null } }));
+          }
+        })
+        // Fail-safe, not fail-open — treat a network error as "no deposit confirmed" rather
+        // than silently letting the clock start without server confirmation.
+        .catch(() => { if (!cancelled) setClockStatus((prev) => ({ ...prev, [key]: { disabled: false, checking: false, reason: 'no_deposit' } })); });
+    });
+
     return () => { cancelled = true; };
   }, [activeBookedKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -365,6 +413,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             const key          = toDateKey(yr, mo, day);
             const isPast       = new Date(yr, mo, day) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
             const dbBooking       = bookingDateMap[key];
+            const msgEntries       = messageDateMap[key] || [];
             const isBooked        = dbBooking?.status === 'booked' || (dbBooking && !dbBooking.status); // legacy = booked
             const isOrder         = dbBooking?.status === 'order';
             const isApprovedOrder = isBooked && dbBooking?.siteId &&
@@ -425,17 +474,37 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                                   : 'items-center justify-center bg-emerald-400 text-white shadow-sm shadow-emerald-100 hover:bg-emerald-500'}
                     ${isToday && !isPending ? 'ring-2 ring-offset-1 ring-sky-400' : ''}`}
                 >
-                  {isBooked && !isApprovedOrder ? (
-                    /* ── Booked day: day number at top + site name below ── */
-                    <>
-                      <span className={`text-xs font-bold leading-none ${isDirectPendingDeposit ? 'text-amber-600' : 'text-red-500'}`}>{day}</span>
-                      {dbBooking?.siteName && (
-                        <span className={`w-full px-0.5 mt-0.5 text-[7px] font-bold text-center leading-tight line-clamp-3 break-words ${isDirectPendingDeposit ? 'text-amber-700' : 'text-red-600'}`}>
-                          {dbBooking.siteName}
-                        </span>
-                      )}
-                    </>
-                  ) : (
+                  {isBooked && !isApprovedOrder ? (() => {
+                    // A trade can send multiple workers to different sites on the same day —
+                    // show one line PER SITE (not joined) so worker counts read clearly per job.
+                    const bookedEntries = msgEntries.filter((m) => m.status === 'booked');
+                    const bySite = new Map();
+                    bookedEntries.forEach((m) => {
+                      if (!m.siteName) return;
+                      bySite.set(m.siteName, (bySite.get(m.siteName) || 0) + (m.workers || 1));
+                    });
+                    const siteRows = [...bySite.entries()]; // [siteName, totalWorkers][]
+                    const textColor = isDirectPendingDeposit ? 'text-amber-700' : 'text-red-600';
+                    return (
+                      /* ── Booked day: day number at top + one line per site below ── */
+                      <>
+                        <span className={`text-xs font-bold leading-none ${isDirectPendingDeposit ? 'text-amber-600' : 'text-red-500'}`}>{day}</span>
+                        {siteRows.length > 0 ? (
+                          <span className="w-full px-0.5 mt-0.5 flex flex-col gap-px overflow-hidden">
+                            {siteRows.map(([name, workers]) => (
+                              <span key={name} className={`text-[6.5px] font-bold text-center leading-tight truncate ${textColor}`}>
+                                👷{workers} {name}
+                              </span>
+                            ))}
+                          </span>
+                        ) : dbBooking?.siteName && (
+                          <span className={`w-full px-0.5 mt-0.5 text-[7px] font-bold text-center leading-tight line-clamp-3 break-words ${textColor}`}>
+                            {dbBooking.siteName}
+                          </span>
+                        )}
+                      </>
+                    );
+                  })() : (
                     /* ── All other days ── */
                     <>
                       <span className="leading-none">{day}</span>
@@ -446,7 +515,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                       )}
                       {isOrder && !isApprovedOrder && dbBooking?.siteName && (
                         <span className="absolute bottom-0.5 left-0 right-0 text-[6px] font-bold text-white/90 text-center px-0.5 truncate leading-none">
-                          {dbBooking.siteName}
+                          {msgEntries.length > 0 ? `👷${msgEntries.reduce((s, m) => s + (m.workers || 1), 0)} ` : ''}{dbBooking.siteName}
                         </span>
                       )}
                       {!(isBooked || isOrder) && (isApplied || isPending) && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/80" />}
@@ -454,11 +523,20 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                     </>
                   )}
                 </button>
-                {dbBooking && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-10 hidden group-hover:block w-64 bg-slate-800 text-white text-xs rounded-xl px-3 py-2 shadow-xl pointer-events-none">
-                    <p className="font-semibold truncate whitespace-nowrap">
-                      {isBooked ? '🔒' : '📋'} {dbBooking.siteName}{dbBooking.siteAddress && <span className="text-slate-300 ml-1.5">📍 {dbBooking.siteAddress}</span>}
-                    </p>
+                {(dbBooking || msgEntries.length > 0) && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-10 hidden group-hover:block w-64 bg-slate-800 text-white text-xs rounded-xl px-3 py-2 shadow-xl pointer-events-none space-y-1">
+                    {msgEntries.length > 0 ? (
+                      msgEntries.map((m, idx) => (
+                        <p key={idx} className="font-semibold truncate whitespace-nowrap">
+                          {m.status === 'booked' ? '🔒' : '📋'} 👷{m.workers} {m.siteName}
+                          {m.siteAddress && <span className="text-slate-300 ml-1.5">📍 {m.siteAddress}</span>}
+                        </p>
+                      ))
+                    ) : (
+                      <p className="font-semibold truncate whitespace-nowrap">
+                        {isBooked ? '🔒' : '📋'} {dbBooking.siteName}{dbBooking.siteAddress && <span className="text-slate-300 ml-1.5">📍 {dbBooking.siteAddress}</span>}
+                      </p>
+                    )}
                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-slate-800" />
                   </div>
                 )}
@@ -518,19 +596,24 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
 
         <div>{renderMonth(viewYear, viewMonth)}</div>
 
-        {/* Booked-day action strip — appears when a red day is tapped */}
-        {activeBookedKey && bookingDateMap[activeBookedKey] && (() => {
-          const bk = bookingDateMap[activeBookedKey];
-          const isPendingDeposit = !bk.siteId && bk.contractorId &&
-            !depositedSet.has(`${String(bk.contractorId)}_${activeBookedKey}`);
+        {/* Booked-day action strip — one row PER SITE, so hours can be logged separately.
+            Sourced from messageBookings (same as the calendar cell) instead of raw
+            TradePro.bookings, so a booking whose worker_offer confirmation never actually
+            went through (e.g. rejected for lacking open slots) doesn't show a phantom row. */}
+        {activeBookedKey && (() => {
+          const bookingsAtDate = getConfirmedBookingsAtDate(activeBookedKey);
+          if (bookingsAtDate.length === 0) return null;
+
+          const rescheduleTargetBk = bookingsAtDate.find((b) => bookingKeyOf(b) === rescheduleSiteKey);
 
           const handleRescheduleConfirm = async () => {
-            if (!rescheduleNewKey || rescheduling) return;
+            if (!rescheduleNewKey || !rescheduleTargetBk || rescheduling) return;
             setRescheduling(true);
             try {
-              await requestReschedule(bk.siteId, rescheduleNewKey);
-              toast.success(`📅 Reschedule request sent for ${bk.siteName}`, { duration: 5000 });
+              await requestReschedule(rescheduleTargetBk.siteId, rescheduleNewKey);
+              toast.success(`📅 Reschedule request sent for ${rescheduleTargetBk.siteName}`, { duration: 5000 });
               setRescheduleMode(false);
+              setRescheduleSiteKey(null);
               setRescheduleNewKey(null);
             } catch (err) {
               if (err?.response?.status === 409) {
@@ -541,100 +624,134 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             } finally { setRescheduling(false); }
           };
 
-          const handleDelete = async () => {
-            if (deleting) return;
-            if (!window.confirm(`Remove your booking for "${bk.siteName}"?`)) return;
-            setDeleting(true);
-            try {
-              await removeBooking(bk.siteId);
-              toast.success(`Booking removed for ${bk.siteName}`, { duration: 4000 });
-              // Remove from live bookings so calendar re-renders instantly
-              setLiveBookings((prev) => prev.filter((b) => String(b.siteId) !== String(bk.siteId)));
-              setActiveBookedKey(null);
-              setRescheduleMode(false);
-              setRescheduleNewKey(null);
-            } catch { toast.error('Failed to remove booking', { duration: 4000 }); }
-            finally { setDeleting(false); }
-          };
-
           return (
             <div className="mx-4 mb-3 space-y-2">
-              {/* Main strip */}
-              <div className={`rounded-2xl border px-4 py-3 flex items-center gap-2 ${rescheduleMode ? 'bg-violet-50 border-violet-200' : isPendingDeposit ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-bold truncate ${rescheduleMode ? 'text-violet-700' : isPendingDeposit ? 'text-amber-700' : 'text-red-700'}`}>
-                    {rescheduleMode ? '📅 Pick a new date on the calendar' : `${isPendingDeposit ? '💳' : '🔒'} ${bk.siteName}`}
-                  </p>
-                  {!rescheduleMode && bk.siteAddress && <p className={`text-[10px] truncate mt-0.5 ${isPendingDeposit ? 'text-amber-400' : 'text-red-400'}`}>📍 {bk.siteAddress}</p>}
-                  {!rescheduleMode && <p className={`text-[10px] mt-0.5 ${isPendingDeposit ? 'text-amber-400' : 'text-red-400'}`}>📅 {activeBookedKey}</p>}
-                  {!rescheduleMode && isPendingDeposit && <p className="text-[10px] text-amber-500 font-semibold mt-0.5">Waiting for contractor's deposit</p>}
-                  {rescheduleMode && <p className="text-[10px] text-violet-400 mt-0.5">Tap any green day above ↑</p>}
-                </div>
+              {bookingsAtDate.map((bk) => {
+                const bkKey = bookingKeyOf(bk);
+                const isPendingDeposit = !bk.siteId && bk.contractorId &&
+                  !depositedSet.has(`${String(bk.contractorId)}_${activeBookedKey}`);
+                const isRowRescheduling = rescheduleMode && rescheduleSiteKey === bkKey;
+                const status     = clockStatus[bkKey] || { disabled: false, checking: false, reason: null };
+                const isActive   = timerRunning && bgTimerRef.current.bookingKey === bkKey;
+                const isDisabled = status.disabled && !isActive; // never disable if timer is already running
+                const noDeposit  = status.reason === 'no_deposit'; // clickable — explains itself via popup, not greyed out
+                const clockTitle = status.checking  ? 'Checking…'
+                                 : status.reason === 'approved'            ? 'Hours already approved for this day ✅'
+                                 : status.reason === 'pending_submission'  ? 'Hours already submitted — awaiting approval 🕐'
+                                 : noDeposit         ? 'No deposit held for this job — tap for details 💳'
+                                 : isActive          ? 'Timer running — tap to open'
+                                 :                     'Log working hours';
 
-                {/* 💬 Chat */}
-                <button
-                  onClick={async () => {
-                    const rawSiteId = bk.siteId ?? bk.siteId;
-                    if (!rawSiteId) { toast.warning('No site ID on this booking'); return; }
-                    try {
-                      const result = await getTradeChatBySite(String(rawSiteId));
-                      setChatHistory(result?.chat?.messages ?? []);
-                      setChatContractorId(String(result?.contractorId ?? ''));
-                    } catch (err) {
-                      console.error('Chat load error', err);
-                      setChatHistory([]);
+                const handleClockClick = () => {
+                  if (isDisabled || status.checking) return;
+                  if (noDeposit) {
+                    Swal.fire({
+                      icon:  'warning',
+                      title: "Can't start working yet",
+                      text:  "We can't start working because there is no deposit for that job.",
+                      confirmButtonText: 'Got it',
+                      confirmButtonColor: '#f59e0b',
+                      customClass: { popup: 'rounded-3xl' },
+                    });
+                    return;
+                  }
+                  setWorkingHoursTargetKey(bkKey);
+                };
+
+                const handleRowChat = async () => {
+                  if (!bk.siteId) { toast.warning('No site ID on this booking'); return; }
+                  try {
+                    const result = await getTradeChatBySite(String(bk.siteId));
+                    setChatHistory(result?.chat?.messages ?? []);
+                    setChatContractorId(String(result?.contractorId ?? ''));
+                  } catch (err) {
+                    console.error('Chat load error', err);
+                    setChatHistory([]);
+                  }
+                  setChatOpen(bkKey);
+                };
+
+                const handleRowDelete = async () => {
+                  if (deletingKey) return;
+                  if (!window.confirm(`Remove your booking for "${bk.siteName}"?`)) return;
+                  setDeletingKey(bkKey);
+                  try {
+                    await removeBooking(bk.siteId);
+                    toast.success(`Booking removed for ${bk.siteName}`, { duration: 4000 });
+                    // Keep both data sources in sync — liveBookings drives the red/amber day
+                    // colour, messageBookings drives the calendar lines + this action strip.
+                    setLiveBookings((prev) => prev.filter((b) => bookingKeyOf(b) !== bkKey));
+                    setMessageBookings((prev) => prev.filter((m) =>
+                      !(m.date === activeBookedKey && (m.siteId ?? `direct:${m.contractorId}`) === (bk.siteId ?? `direct:${bk.contractorId}`))
+                    ));
+                    if (bookingsAtDate.length <= 1) {
+                      setActiveBookedKey(null);
+                      setRescheduleMode(false);
+                      setRescheduleSiteKey(null);
                     }
-                    setChatOpen(true);
-                  }}
-                  title="Open chat"
-                  className="flex-shrink-0 w-8 h-8 rounded-xl bg-violet-500 hover:bg-violet-400 text-white flex items-center justify-center transition active:scale-95 shadow-sm shadow-violet-200"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                </button>
+                  } catch { toast.error('Failed to remove booking', { duration: 4000 }); }
+                  finally { setDeletingKey(null); }
+                };
 
-                {/* 📅 Update schedule */}
-                <button
-                  onClick={() => { setRescheduleMode((v) => !v); setRescheduleNewKey(null); }}
-                  title="Update schedule"
-                  className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition active:scale-95 shadow-sm ${rescheduleMode ? 'bg-sky-500 text-white shadow-sky-200' : 'bg-sky-100 hover:bg-sky-200 text-sky-600'}`}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </button>
+                return (
+                  <div key={bkKey} className={`rounded-2xl border px-4 py-3 flex items-center gap-2 ${isRowRescheduling ? 'bg-violet-50 border-violet-200' : isPendingDeposit ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-bold truncate ${isRowRescheduling ? 'text-violet-700' : isPendingDeposit ? 'text-amber-700' : 'text-red-700'}`}>
+                        {isRowRescheduling ? '📅 Pick a new date on the calendar' : `${isPendingDeposit ? '💳' : '🔒'} ${bk.siteName}`}
+                      </p>
+                      {!isRowRescheduling && bk.siteAddress && <p className={`text-[10px] truncate mt-0.5 ${isPendingDeposit ? 'text-amber-400' : 'text-red-400'}`}>📍 {bk.siteAddress}</p>}
+                      {!isRowRescheduling && <p className={`text-[10px] mt-0.5 ${isPendingDeposit ? 'text-amber-400' : 'text-red-400'}`}>📅 {activeBookedKey} · 👷 {bk.workers_no ?? 1}</p>}
+                      {!isRowRescheduling && isPendingDeposit && <p className="text-[10px] text-amber-500 font-semibold mt-0.5">Waiting for contractor's deposit</p>}
+                      {isRowRescheduling && <p className="text-[10px] text-violet-400 mt-0.5">Tap any green day above ↑</p>}
+                    </div>
 
-                {/* ⏱️ Working hours — disabled if a pending payment already exists for this day */}
-                {(() => {
-                  const isActive   = timerRunning && bgTimerRef.current.bookingKey === activeBookedKey;
-                  const isDisabled = clockDisabled && !isActive; // never disable if timer is already running
-                  const isDirect   = !bookingDateMap[activeBookedKey]?.siteId;
-                  const isApproved = activeBookedKey && bookingDateMap[activeBookedKey]?.siteId &&
-                    approvedOrderSet.has(`${String(bookingDateMap[activeBookedKey].siteId)}_${activeBookedKey}`);
-                  const title      = clockChecking  ? 'Checking…'
-                                   : isApproved     ? 'Hours already approved for this day ✅'
-                                   : (isDisabled && isDirect) ? 'Waiting for contractor\'s deposit 💳'
-                                   : isDisabled     ? 'Hours already submitted — awaiting approval 🕐'
-                                   : isActive       ? 'Timer running — tap to open'
-                                   :                  'Log working hours';
-                  return (
+                    {/* 💬 Chat */}
                     <button
-                      onClick={() => { if (!isDisabled && !clockChecking) setWorkingHoursOpen(true); }}
-                      disabled={isDisabled || clockChecking}
-                      title={title}
+                      onClick={handleRowChat}
+                      title="Open chat"
+                      className="flex-shrink-0 w-8 h-8 rounded-xl bg-violet-500 hover:bg-violet-400 text-white flex items-center justify-center transition active:scale-95 shadow-sm shadow-violet-200"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </button>
+
+                    {/* 📅 Update schedule */}
+                    <button
+                      onClick={() => {
+                        if (isRowRescheduling) { setRescheduleMode(false); setRescheduleSiteKey(null); }
+                        else { setRescheduleMode(true); setRescheduleSiteKey(bkKey); }
+                        setRescheduleNewKey(null);
+                      }}
+                      title="Update schedule"
+                      className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition active:scale-95 shadow-sm ${isRowRescheduling ? 'bg-sky-500 text-white shadow-sky-200' : 'bg-sky-100 hover:bg-sky-200 text-sky-600'}`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+
+                    {/* ⏱️ Working hours — one clock PER SITE. A missing deposit keeps this
+                        clickable (not greyed out) so tapping it explains why via a popup;
+                        only 'approved'/'pending_submission'/checking states hard-disable it. */}
+                    <button
+                      onClick={handleClockClick}
+                      disabled={isDisabled || status.checking}
+                      title={clockTitle}
                       className={`relative flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition shadow-sm ${
-                        isDisabled || clockChecking
+                        isDisabled || status.checking
                           ? 'bg-slate-100 text-slate-300 cursor-not-allowed opacity-50'
                           : isActive
                             ? 'bg-violet-500 text-white shadow-violet-300 active:scale-95'
-                            : 'bg-violet-100 hover:bg-violet-200 text-violet-600 shadow-violet-100 active:scale-95'
+                            : noDeposit
+                              ? 'bg-amber-100 hover:bg-amber-200 text-amber-600 shadow-amber-100 active:scale-95'
+                              : 'bg-violet-100 hover:bg-violet-200 text-violet-600 shadow-violet-100 active:scale-95'
                       }`}
                     >
                       {isActive && !isDisabled && (
                         <span className="absolute inset-0 rounded-xl bg-violet-400 animate-ping opacity-40 pointer-events-none" />
                       )}
-                      {clockChecking ? (
+                      {status.checking ? (
                         <span className="w-3 h-3 border-2 border-slate-300 border-t-slate-400 rounded-full animate-spin" />
                       ) : (
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 relative" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -643,36 +760,31 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                         </svg>
                       )}
                     </button>
-                  );
-                })()}
 
-                {/* 🗑️ Delete booking */}
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  title="Remove booking"
-                  className="flex-shrink-0 w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-500 flex items-center justify-center transition active:scale-95 disabled:opacity-40"
-                >
-                  {deleting ? (
-                    <span className="w-3 h-3 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  )}
-                </button>
+                    {/* 🗑️ Delete booking */}
+                    <button
+                      onClick={handleRowDelete}
+                      disabled={deletingKey === bkKey}
+                      title="Remove booking"
+                      className="flex-shrink-0 w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-500 flex items-center justify-center transition active:scale-95 disabled:opacity-40"
+                    >
+                      {deletingKey === bkKey ? (
+                        <span className="w-3 h-3 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
 
-                <button
-                  onClick={() => { setActiveBookedKey(null); setRescheduleMode(false); setRescheduleNewKey(null); }}
-                  className="text-slate-300 hover:text-slate-500 text-lg leading-none flex-shrink-0"
-                >×</button>
-              </div>
-
-              {/* Reschedule confirm row — appears when a new date is picked */}
-              {rescheduleMode && rescheduleNewKey && (
+              {/* Reschedule confirm row — appears when a new date is picked for the targeted site */}
+              {rescheduleMode && rescheduleNewKey && rescheduleTargetBk && (
                 <div className="rounded-2xl bg-violet-50 border border-violet-200 px-4 py-2.5 flex items-center gap-3">
                   <p className="flex-1 text-xs font-semibold text-violet-700">
-                    Send request for <span className="font-extrabold">{rescheduleNewKey}</span>?
+                    Send request for <span className="font-extrabold">{rescheduleTargetBk.siteName}</span> on <span className="font-extrabold">{rescheduleNewKey}</span>?
                   </p>
                   <button
                     onClick={handleRescheduleConfirm}
@@ -682,13 +794,21 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
                     {rescheduling ? '…' : '✉️ Send'}
                   </button>
                   <button
-                    onClick={() => { setRescheduleMode(false); setRescheduleNewKey(null); }}
+                    onClick={() => { setRescheduleMode(false); setRescheduleSiteKey(null); setRescheduleNewKey(null); }}
                     className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-500 transition"
                   >
                     Cancel
                   </button>
                 </div>
               )}
+
+              {/* Close the whole strip / deselect the day */}
+              <button
+                onClick={() => { setActiveBookedKey(null); setRescheduleMode(false); setRescheduleSiteKey(null); setRescheduleNewKey(null); }}
+                className="w-full text-center text-xs text-slate-400 hover:text-slate-600 py-1 transition"
+              >
+                × Close
+              </button>
             </div>
           );
         })()}
@@ -757,12 +877,14 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
         </div>
       )}
       {/* ── Real-time chat panel (bottom-left, half width) ───────────────── */}
-      {/* ── Working-hours modal ─────────────────────────────── */}
-      {workingHoursOpen && activeBookedKey && bookingDateMap[activeBookedKey] && (() => {
-        const bk = bookingDateMap[activeBookedKey];
+      {/* ── Working-hours modal — targets one specific site's booking ──────── */}
+      {workingHoursTargetKey && activeBookedKey && (() => {
+        const bk = getConfirmedBookingsAtDate(activeBookedKey).find((b) => bookingKeyOf(b) === workingHoursTargetKey);
+        if (!bk) return null;
         return (
           <WorkingHoursModal
             date={activeBookedKey}
+            bookingKey={workingHoursTargetKey}
             siteName={bk.siteName}
             siteAddress={bk.siteAddress}
             siteId={bk.siteId ? String(bk.siteId) : ''}
@@ -774,18 +896,15 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             bgTimerRef={bgTimerRef}
             timerRunning={timerRunning}
             setTimerRunning={setTimerRunning}
-            onClose={() => setWorkingHoursOpen(false)}
-            onSent={() => setClockDisabled(true)}
+            onClose={() => setWorkingHoursTargetKey(null)}
+            onSent={() => setClockStatus((prev) => ({ ...prev, [workingHoursTargetKey]: { disabled: true, checking: false } }))}
           />
         );
       })()}
 
-      {chatOpen && activeBookedKey && bookingDateMap[activeBookedKey] && (() => {
-        const bk = bookingDateMap[activeBookedKey];
-        // We need contractorId from the booking — stored as bk.contractorId or look up from message
-        // bk comes from initialBookings which has: siteId, siteName, siteAddress, dates, status
-        // We don't have contractorId in bookings, so we'll use siteId to look it up.
-        // For now pass siteId as a proxy — the server resolves it from the chat record.
+      {chatOpen && activeBookedKey && (() => {
+        const bk = getConfirmedBookingsAtDate(activeBookedKey).find((b) => bookingKeyOf(b) === chatOpen);
+        if (!bk) return null;
         const sharedProps = {
           contractorId:    chatContractorId,
           tradeProId:      String(userId),
@@ -794,7 +913,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
           userType:        'trade',
           initialMessages: chatHistory,
           uploadFn:        tradeUploadChatFile,
-          onClose: () => { setChatOpen(false); setChatHistory([]); setChatContractorId(''); },
+          onClose: () => { setChatOpen(null); setChatHistory([]); setChatContractorId(''); },
         };
         return (
           <div className="fixed inset-0 z-50">

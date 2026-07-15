@@ -65,12 +65,14 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
   // Workers picker modal state
   const [workersModal, setWorkersModal] = useState(null); // { msg, count, error, slotsLeft }
 
-  // Dates already confirmed — used to disable other pending messages for the same date
-  const approvedDates = new Set(
+  // Date+site combos already confirmed — used to disable other pending messages for the
+  // same site on the same date. A trade can have multiple workers, so the same date at a
+  // DIFFERENT site is not a conflict — only re-booking the identical site+date is blocked.
+  const approvedDateSiteKeys = new Set(
     messages
       .filter((m) => m.status === 'approved' && m.type !== 'approval' && m.senderType !== 'trade')
-      .map((m) => m.requestedDate)
-      .filter(Boolean)
+      .filter((m) => m.requestedDate && m.site?._id)
+      .map((m) => `${m.site._id}_${m.requestedDate}`)
   );
 
   useEffect(() => {
@@ -248,7 +250,8 @@ export default function AvailabilityMessagesModal({ onClose, onApproved }) {
                   )}
 
                   {!isApproval && !isMyApply && msg.status === 'pending' && (() => {
-                    const dateConflict = msg.requestedDate && approvedDates.has(msg.requestedDate);
+                    const dateConflict = msg.requestedDate && msg.site?._id &&
+                      approvedDateSiteKeys.has(`${msg.site._id}_${msg.requestedDate}`);
                     return (
                       <div className="px-4 pb-4">
                         {dateConflict ? (
