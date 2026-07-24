@@ -637,10 +637,12 @@ export default function ContractorDashboard() {
       .catch(() => {});
 
   const checkAndShowDeposit = (normalized) => {
-    console.log('[deposit-check] checking', normalized.length, 'sites for workers_no===0');
-    // Only trigger if no trade on this site has a deposit already held
+    console.log('[deposit-check] checking', normalized.length, 'sites for fully-booked trades');
+    // workers_no is the FIXED TOTAL needed and is never decremented — `assigned` is the
+    // server-derived flag that flips true once committed workers reach that total, so
+    // it's the correct "fully booked, ready for deposit" signal (not workers_no === 0).
     const site = normalized.find((s) =>
-      s.tradesNeeded?.some((t) => t.workers_no === 0 && !t.depositHeld)
+      s.tradesNeeded?.some((t) => t.assigned === true && !t.depositHeld)
     );
     console.log('[deposit-check] site needing deposit:', site?._id, site?.name ?? 'none');
     if (!site) return;
