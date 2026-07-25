@@ -19,6 +19,7 @@ React 18 + Vite + Tailwind CSS v4 (`@tailwindcss/vite`).
 ```bash
 npm run dev      # → http://localhost:5173
 npm run build
+npm test         # vitest + RTL + MSW in jsdom — see src/test/README.md
 ```
 
 ## Env

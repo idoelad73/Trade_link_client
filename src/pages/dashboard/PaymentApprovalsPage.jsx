@@ -269,9 +269,12 @@ export default function PaymentApprovalsPage() {
 
     setApproving(order._id);
     try {
-      await updatePaymentApproval(order._id, 'approved');
+      const res = await updatePaymentApproval(order._id, 'approved');
       setOrders((prev) => prev.filter((o) => o._id !== order._id));
       toast.success(t.paySuccess, { duration: 5000 });
+      // Approval succeeded but the payout or receipt email may not have — the
+      // server reports those instead of failing the whole request silently.
+      (res?.warnings ?? []).forEach((w) => toast.warning(w.message, { duration: 9000 }));
     } catch (err) {
       // 402 = hours exceeded deposit → need extra payment from contractor
       if (err.response?.status === 402 && err.response.data?.needsOverage) {
@@ -291,9 +294,10 @@ export default function PaymentApprovalsPage() {
     setOverageModal(null);
     setApproving(order._id);
     try {
-      await updatePaymentApproval(order._id, 'approved', paymentIntent?.id);
+      const res = await updatePaymentApproval(order._id, 'approved', paymentIntent?.id);
       setOrders((prev) => prev.filter((o) => o._id !== order._id));
       toast.success(t.paySuccess, { duration: 5000 });
+      (res?.warnings ?? []).forEach((w) => toast.warning(w.message, { duration: 9000 }));
     } catch (err) {
       toast.error(t.piError);
     } finally {

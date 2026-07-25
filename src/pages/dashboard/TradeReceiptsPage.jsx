@@ -52,6 +52,9 @@ function fmtDate(dateStr) {
   });
 }
 
+// Money for the receipt — always two decimals so a fee of 7.5 reads as $7.50.
+const money = (n) => `$${Number(n ?? 0).toFixed(2)}`;
+
 function statusPill(status) {
   if (status === 'paid')     return 'bg-emerald-100 text-emerald-700 border-emerald-200';
   if (status === 'approved') return 'bg-sky-100 text-sky-700 border-sky-200';
@@ -110,10 +113,12 @@ function generatePDF(r) {
   doc.line(40, y, W - 40, y);
   y += 22;
 
+  // Plain ASCII hyphen only — jsPDF's built-in Helvetica is WinAnsi-encoded and
+  // has no glyph for '−' (U+2212 MINUS SIGN), which rendered as a stray '"'.
   const totals = [
-    ['Order Total',  `$${r.order_sum   ?? 0}`, false],
-    ['Platform Fee', `− $${r.fee_sum   ?? 0}`, false],
-    ['Your Payout',  `$${r.payment_sum ?? 0}`, true],
+    ['Order Total',  money(r.order_sum),     false],
+    ['Platform Fee', `-${money(r.fee_sum)}`, false],
+    ['Your Payout',  money(r.payment_sum),   true],
   ];
   totals.forEach(([label, value, isLast]) => {
     if (isLast) {
@@ -192,15 +197,15 @@ function ReceiptModal({ r, t, onClose }) {
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Order Total</span>
-              <span className="font-semibold text-slate-800">${r.order_sum ?? 0}</span>
+              <span className="font-semibold text-slate-800">{money(r.order_sum)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-slate-500">Platform Fee</span>
-              <span className="text-red-400 font-medium">− ${r.fee_sum ?? 0}</span>
+              <span className="text-red-400 font-medium">−{money(r.fee_sum)}</span>
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-slate-100">
               <span className="font-bold text-slate-700">Your Payout</span>
-              <span className="text-2xl font-extrabold text-sky-600">${r.payment_sum ?? 0}</span>
+              <span className="text-2xl font-extrabold text-sky-600">{money(r.payment_sum)}</span>
             </div>
           </div>
         </div>
@@ -401,12 +406,12 @@ export default function TradeReceiptsPage() {
                         </div>
                       ))}
                       <div className="flex items-center gap-1 bg-slate-50 rounded-lg px-2 py-0.5 sm:px-2.5 sm:py-1">
-                        <span className="text-[10px] sm:text-xs text-slate-400 line-through">${r.order_sum ?? 0}</span>
-                        <span className="text-[10px] sm:text-xs text-red-400 font-medium">−${r.fee_sum ?? 0}</span>
+                        <span className="text-[10px] sm:text-xs text-slate-400 line-through">{money(r.order_sum)}</span>
+                        <span className="text-[10px] sm:text-xs text-red-400 font-medium">−{money(r.fee_sum)}</span>
                       </div>
                       <div className="flex items-center gap-1 bg-sky-50 border border-sky-100 rounded-lg px-2 py-0.5 sm:px-2.5 sm:py-1 ml-auto">
                         <span className="text-[10px] sm:text-xs text-slate-500">Payout</span>
-                        <span className="text-xs sm:text-sm font-extrabold text-sky-600">${r.payment_sum ?? 0}</span>
+                        <span className="text-xs sm:text-sm font-extrabold text-sky-600">{money(r.payment_sum)}</span>
                       </div>
                     </div>
 

@@ -29,6 +29,8 @@ export const getDepositStatus = ({ siteId, contractorId, date }) => {
 export const getDepositedRequests    = () => api.get('/trade/deposited-requests').then(r => r.data.deposits);
 export const submitWorkLog           = (payload)  => api.post('/trade/work-log', payload).then(r => r.data);
 export const getPaymentApprovedCount = ()  => api.get('/trade/payment-approved/count').then(r => r.data.count);
+// Approved work whose payout is stuck on bank-detail problems — { blocked, reason, totalOwed, ... }
+export const getPayoutBlocked        = ()  => api.get('/trade/payout-blocked').then(r => r.data);
 // Returns { orders: [...approved], rejected: [...rejectedNotices] }
 export const getPaymentApproved      = ()  => api.get('/trade/payment-approved').then(r => r.data);
 

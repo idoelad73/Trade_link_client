@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
-import { getMe, updateLocation, getPaymentApprovedCount, getApprovedOrderDates, getDepositedRequests, getGradableContractors } from '../../api/trade.js';
+import Swal from 'sweetalert2';
+import { getMe, updateLocation, getPaymentApprovedCount, getApprovedOrderDates, getDepositedRequests, getGradableContractors, getPayoutBlocked } from '../../api/trade.js';
 import { completeOnboarding, startOnboarding } from '../../api/tradeStripe.js';
 import { toast } from '../../utils/toast.js';
 import TradeInfoModal from '../../components/trade/TradeInfoModal.jsx';
@@ -78,6 +79,56 @@ export default function TradeDashboard() {
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
+  // ── Payout blocked on bank details → prompt the trade pro to fix it ───────
+  // Their work was approved and the money is owed, but Stripe can't pay them.
+  // Without this the failure is invisible on their side.
+  useEffect(() => {
+    getPayoutBlocked()
+      .then(async (info) => {
+        if (!info?.blocked) return;
+
+        const jobList = (info.jobs ?? [])
+          .slice(0, 4)
+          .map(j => `<li style="margin:2px 0">${j.site} · ${j.date} — <b>$${Number(j.amount).toFixed(2)}</b></li>`)
+          .join('');
+
+        const { isConfirmed } = await Swal.fire({
+          icon:  'warning',
+          title: 'Please check your bank account',
+          html: `
+            <p style="font-size:14px;color:#475569;line-height:1.6;margin-bottom:10px">
+              ${info.reason ?? 'We could not send your payout.'}
+            </p>
+            <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:10px 14px;text-align:left">
+              <p style="font-size:12px;font-weight:700;color:#b91c1c;margin-bottom:4px">
+                ${info.count} approved job${info.count !== 1 ? 's' : ''} awaiting payout — $${Number(info.totalOwed).toFixed(2)} total
+              </p>
+              <ul style="font-size:12px;color:#7f1d1d;padding-left:18px;margin:0">${jobList}</ul>
+            </div>
+            <p style="font-size:12px;color:#94a3b8;margin-top:10px">
+              Your money is safe and still owed to you. It will be released once your bank details are verified.
+            </p>`,
+          showCancelButton:   true,
+          confirmButtonText:  '🏦 Fix bank details',
+          cancelButtonText:   'Later',
+          confirmButtonColor: '#0ea5e9',
+          cancelButtonColor:  '#94a3b8',
+          customClass: { popup: 'rounded-3xl' },
+        });
+
+        if (isConfirmed) {
+          try {
+            const { url } = await startOnboarding();
+            if (url) window.location.href = url;
+            else toast.error('Could not open bank verification. Please try again.');
+          } catch {
+            toast.error('Could not open bank verification. Please try again.');
+          }
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // ── Handle Stripe onboarding return ──────────────────────────────────────
