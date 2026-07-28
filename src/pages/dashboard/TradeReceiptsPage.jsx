@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import useUIStore from '../../stores/uiStore.js';
-import { getMyReceipts } from '../../api/trade.js';
+import { getMyReceipts, getReceiptFilters } from '../../api/trade.js';
 
 const content = {
   en: {
@@ -15,13 +15,17 @@ const content = {
     status: { paid: 'Paid', approved: 'Approved', pending: 'Pending' },
     modal: { title: 'Receipt', close: 'Close', download: 'Download PDF' },
     search: {
-      placeholder_contractor: 'Contractor name…',
-      placeholder_site: 'Project / site name…',
+      placeholder_contractor: 'All contractors',
+      placeholder_site: 'All projects',
+      label_contractor: 'Contractor',
+      label_site: 'Project / site',
       label_from: 'From',
       label_to: 'To',
       btn_search: 'Search',
       btn_clear: 'Clear',
       active: 'Active filters',
+      no_contractors: 'No contractors with orders yet',
+      no_sites: 'No projects yet',
     },
   },
   es: {
@@ -34,13 +38,17 @@ const content = {
     status: { paid: 'Pagado', approved: 'Aprobado', pending: 'Pendiente' },
     modal: { title: 'Recibo', close: 'Cerrar', download: 'Descargar PDF' },
     search: {
-      placeholder_contractor: 'Nombre del contratista…',
-      placeholder_site: 'Proyecto / sitio…',
+      placeholder_contractor: 'Todos los contratistas',
+      placeholder_site: 'Todos los proyectos',
+      label_contractor: 'Contratista',
+      label_site: 'Proyecto / sitio',
       label_from: 'Desde',
       label_to: 'Hasta',
       btn_search: 'Buscar',
       btn_clear: 'Limpiar',
       active: 'Filtros activos',
+      no_contractors: 'Aún no hay contratistas con órdenes',
+      no_sites: 'Aún no hay proyectos',
     },
   },
 };
@@ -231,6 +239,18 @@ function SearchPanel({ t, onSearch, loading }) {
   const [dateFrom,   setDateFrom]   = useState('');
   const [dateTo,     setDateTo]     = useState('');
 
+  // Picker options come from the server so they only ever list contractors this
+  // trade pro actually has orders with, and the sites those orders were worked at.
+  const [options, setOptions] = useState({ contractors: [], sites: [] });
+  const [optionsLoading, setOptionsLoading] = useState(true);
+
+  useEffect(() => {
+    getReceiptFilters()
+      .then(setOptions)
+      .catch(() => setOptions({ contractors: [], sites: [] }))
+      .finally(() => setOptionsLoading(false));
+  }, []);
+
   const hasFilters = contractor || site || dateFrom || dateTo;
 
   // Debounce text fields — fire 400 ms after last keystroke
@@ -257,33 +277,50 @@ function SearchPanel({ t, onSearch, loading }) {
   return (
     <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 mb-6 space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Contractor name — live search */}
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🏗️</span>
-          <input
-            type="text"
-            value={contractor}
-            onChange={(e) => setContractor(e.target.value)}
-            placeholder={s.placeholder_contractor}
-            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 placeholder-slate-300"
-          />
-          {loading && contractor && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-sky-300 border-t-sky-500 rounded-full animate-spin" />
-          )}
+        {/* Contractor — only those this trade pro has orders with */}
+        <div>
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-1">{s.label_contractor}</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">🏗️</span>
+            <select
+              value={contractor}
+              onChange={(e) => setContractor(e.target.value)}
+              disabled={optionsLoading}
+              className="w-full appearance-none pl-9 pr-8 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-60 disabled:cursor-wait"
+            >
+              <option value="">{s.placeholder_contractor}</option>
+              {options.contractors.length === 0 && !optionsLoading && (
+                <option value="" disabled>{s.no_contractors}</option>
+              )}
+              {options.contractors.map((c) => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
+            </select>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">▾</span>
+          </div>
         </div>
-        {/* Site / project name — live search */}
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">📍</span>
-          <input
-            type="text"
-            value={site}
-            onChange={(e) => setSite(e.target.value)}
-            placeholder={s.placeholder_site}
-            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 placeholder-slate-300"
-          />
-          {loading && site && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-sky-300 border-t-sky-500 rounded-full animate-spin" />
-          )}
+
+        {/* Project / site — the sites this trade pro actually worked */}
+        <div>
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-1">{s.label_site}</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">📍</span>
+            <select
+              value={site}
+              onChange={(e) => setSite(e.target.value)}
+              disabled={optionsLoading}
+              className="w-full appearance-none pl-9 pr-8 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:opacity-60 disabled:cursor-wait"
+            >
+              <option value="">{s.placeholder_site}</option>
+              {options.sites.length === 0 && !optionsLoading && (
+                <option value="" disabled>{s.no_sites}</option>
+              )}
+              {options.sites.map((st) => (
+                <option key={st.id} value={st.name}>{st.name}</option>
+              ))}
+            </select>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">▾</span>
+          </div>
         </div>
       </div>
 
@@ -311,7 +348,10 @@ function SearchPanel({ t, onSearch, loading }) {
       </div>
 
       {hasFilters && (
-        <div className="flex justify-end pt-1">
+        <div className="flex justify-end items-center gap-3 pt-1">
+          {loading && (
+            <span className="w-3.5 h-3.5 border-2 border-sky-300 border-t-sky-500 rounded-full animate-spin" />
+          )}
           <button
             onClick={handleClear}
             className="px-5 py-2 rounded-xl border border-slate-200 text-slate-500 font-semibold text-sm hover:bg-slate-50 transition"

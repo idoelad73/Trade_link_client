@@ -14,6 +14,9 @@ export const removeBooking     = (siteId)            => api.delete('/trade/booki
 export const getTradeChatBySite = (siteId) => api.get(`/chat/trade/${siteId}`).then(r => r.data);
 export const uploadChatFile     = (formData) => api.post('/chat/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
 export const getMyReceipts           = (params = {}) => api.get('/trade/receipts', { params }).then(r => r.data.receipts);
+// Picker options for the receipts search bar
+// → { contractors: [{ id, name }], sites: [{ id, name, address }] }
+export const getReceiptFilters       = () => api.get('/trade/receipts/filters').then(r => r.data);
 export const getMyOrders             = () => api.get('/trade/orders').then(r => r.data.orders);
 export const getApprovedOrderDates   = () => api.get('/trade/approved-orders').then(r => r.data.orders);
 export const checkWorkLog            = (siteId, date) => api.get(`/trade/work-log/check?siteId=${siteId}&date=${date}`).then(r => r.data);

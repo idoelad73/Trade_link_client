@@ -69,6 +69,9 @@ export const deleteWorkPlanTrade = (siteId, tradeName) => api.delete(`/contracto
 // Orders / receipts
 export const getMyReceipts = (params = {}) => api.get('/contractor/receipts', { params }).then(r => r.data.receipts);
 export const getMyOrders   = () => api.get('/contractor/orders').then(r => r.data.orders);
+// Picker options for the receipts search bar
+// → { trades: [{ id, name, professionality }], sites: [{ id, name, address }] }
+export const getReceiptFilters = () => api.get('/contractor/receipts/filters').then(r => r.data);
 
 // Payment approvals (tradehours_orders)
 export const getPaymentApprovalsCount  = ()               => api.get('/contractor/payment-approvals/count').then(r => r.data.pendingCount);

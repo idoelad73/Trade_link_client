@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import useUIStore from '../../stores/uiStore.js';
-import { getMyReceipts } from '../../api/contractor.js';
+import { getMyReceipts, getReceiptFilters } from '../../api/contractor.js';
 
 const content = {
   en: {
@@ -15,11 +15,15 @@ const content = {
     status: { paid: 'Paid', approved: 'Approved', pending: 'Pending' },
     modal: { title: 'Receipt', close: 'Close', download: 'Download PDF' },
     search: {
-      placeholder_trade: 'Trade professional name…',
-      placeholder_site: 'Project / site name…',
+      placeholder_trade: 'All trade professionals',
+      placeholder_site: 'All projects',
+      label_trade: 'Trade professional',
+      label_site: 'Project / site',
       label_from: 'From',
       label_to: 'To',
       btn_clear: 'Clear',
+      no_trades: 'No trades with orders yet',
+      no_sites: 'No projects yet',
     },
   },
   es: {
@@ -32,11 +36,15 @@ const content = {
     status: { paid: 'Pagado', approved: 'Aprobado', pending: 'Pendiente' },
     modal: { title: 'Recibo', close: 'Cerrar', download: 'Descargar PDF' },
     search: {
-      placeholder_trade: 'Nombre del profesional…',
-      placeholder_site: 'Proyecto / sitio…',
+      placeholder_trade: 'Todos los profesionales',
+      placeholder_site: 'Todos los proyectos',
+      label_trade: 'Profesional',
+      label_site: 'Proyecto / sitio',
       label_from: 'Desde',
       label_to: 'Hasta',
       btn_clear: 'Limpiar',
+      no_trades: 'Aún no hay oficios con órdenes',
+      no_sites: 'Aún no hay proyectos',
     },
   },
 };
@@ -204,6 +212,18 @@ function SearchPanel({ t, onSearch, loading }) {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo,   setDateTo]   = useState('');
 
+  // Picker options come from the server so they only ever list trades this
+  // contractor actually has orders with, and their real project sites.
+  const [options, setOptions] = useState({ trades: [], sites: [] });
+  const [optionsLoading, setOptionsLoading] = useState(true);
+
+  useEffect(() => {
+    getReceiptFilters()
+      .then(setOptions)
+      .catch(() => setOptions({ trades: [], sites: [] }))
+      .finally(() => setOptionsLoading(false));
+  }, []);
+
   const hasFilters = trade || site || dateFrom || dateTo;
 
   // Debounce all fields — fire 400 ms after last change
@@ -229,33 +249,52 @@ function SearchPanel({ t, onSearch, loading }) {
   return (
     <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-4 mb-6 space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* Trade name */}
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔧</span>
-          <input
-            type="text"
-            value={trade}
-            onChange={(e) => setTrade(e.target.value)}
-            placeholder={s.placeholder_trade}
-            className="w-full pl-9 pr-8 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 placeholder-slate-300"
-          />
-          {loading && trade && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-500 rounded-full animate-spin" />
-          )}
+        {/* Trade professional — only those with orders against this contractor */}
+        <div>
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-1">{s.label_trade}</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">🔧</span>
+            <select
+              value={trade}
+              onChange={(e) => setTrade(e.target.value)}
+              disabled={optionsLoading}
+              className="w-full appearance-none pl-9 pr-8 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-60 disabled:cursor-wait"
+            >
+              <option value="">{s.placeholder_trade}</option>
+              {options.trades.length === 0 && !optionsLoading && (
+                <option value="" disabled>{s.no_trades}</option>
+              )}
+              {options.trades.map((p) => (
+                <option key={p.id} value={p.name}>
+                  {p.name}{p.professionality ? ` · ${p.professionality}` : ''}
+                </option>
+              ))}
+            </select>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">▾</span>
+          </div>
         </div>
-        {/* Site / project name */}
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">📍</span>
-          <input
-            type="text"
-            value={site}
-            onChange={(e) => setSite(e.target.value)}
-            placeholder={s.placeholder_site}
-            className="w-full pl-9 pr-8 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 placeholder-slate-300"
-          />
-          {loading && site && (
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-500 rounded-full animate-spin" />
-          )}
+
+        {/* Project / site — every project card this contractor owns */}
+        <div>
+          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide block mb-1">{s.label_site}</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">📍</span>
+            <select
+              value={site}
+              onChange={(e) => setSite(e.target.value)}
+              disabled={optionsLoading}
+              className="w-full appearance-none pl-9 pr-8 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-60 disabled:cursor-wait"
+            >
+              <option value="">{s.placeholder_site}</option>
+              {options.sites.length === 0 && !optionsLoading && (
+                <option value="" disabled>{s.no_sites}</option>
+              )}
+              {options.sites.map((st) => (
+                <option key={st.id} value={st.name}>{st.name}</option>
+              ))}
+            </select>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">▾</span>
+          </div>
         </div>
       </div>
 
@@ -283,7 +322,10 @@ function SearchPanel({ t, onSearch, loading }) {
       </div>
 
       {hasFilters && (
-        <div className="flex justify-end pt-1">
+        <div className="flex justify-end items-center gap-3 pt-1">
+          {loading && (
+            <span className="w-3.5 h-3.5 border-2 border-emerald-300 border-t-emerald-500 rounded-full animate-spin" />
+          )}
           <button
             onClick={handleClear}
             className="px-5 py-2 rounded-xl border border-slate-200 text-slate-500 font-semibold text-sm hover:bg-slate-50 transition"
