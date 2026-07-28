@@ -81,7 +81,8 @@ export default function TradeGradesListModal({ trades: initialTrades, onClose })
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-slate-800 text-sm truncate">{trade.trade_name}</p>
                     <p className="text-xs font-semibold text-sky-600">{trade.professionality}</p>
-                    <p className="text-xs text-slate-400 truncate mt-0.5">📍 {trade.site_name}</p>
+                    {/* Direct-hire jobs have no site */}
+                    {trade.site_name && <p className="text-xs text-slate-400 truncate mt-0.5">📍 {trade.site_name}</p>}
                     {trade.order_date && (
                       <p className="text-[10px] text-slate-300 mt-0.5">🗓 {fmtDate(trade.order_date)}</p>
                     )}

@@ -86,7 +86,8 @@ export default function TradeGradeModal({ trade, onSubmit, onClose }) {
             <div className="min-w-0">
               <p className="font-extrabold text-slate-800 text-base truncate">{trade.trade_name}</p>
               <p className="text-xs font-semibold text-sky-600 mt-0.5">{trade.professionality}</p>
-              <p className="text-xs text-slate-400 truncate mt-0.5">📍 {trade.site_name}</p>
+              {/* Direct-hire jobs have no site */}
+              {trade.site_name && <p className="text-xs text-slate-400 truncate mt-0.5">📍 {trade.site_name}</p>}
             </div>
           </div>
 

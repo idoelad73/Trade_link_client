@@ -32,6 +32,30 @@ const content = {
   },
 };
 
+// ── "Rate contractors" auto-open snooze ──────────────────────────────────────
+// Dismissing the prompt quiets it for a day. Storage access is wrapped because
+// Safari private mode throws on localStorage rather than returning null, and a
+// dead prompt is far better than a dashboard that fails to mount.
+const GRADE_SNOOZE_KEY   = 'tl-grade-snooze';
+const GRADE_SNOOZE_HOURS = 24;
+
+function isGradePromptSnoozed() {
+  try {
+    const until = Number(localStorage.getItem(GRADE_SNOOZE_KEY));
+    return Number.isFinite(until) && until > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+function snoozeGradePrompt() {
+  try {
+    localStorage.setItem(GRADE_SNOOZE_KEY, String(Date.now() + GRADE_SNOOZE_HOURS * 3_600_000));
+  } catch {
+    // Storage unavailable — the prompt simply reappears next load.
+  }
+}
+
 export default function TradeDashboard() {
   const navigate = useNavigate();
   const { user, clearAuth } = useAuthStore();
@@ -67,7 +91,11 @@ export default function TradeDashboard() {
     getDepositedRequests().then(setDepositedRequests).catch(() => {});
     getGradableContractors().then(list => {
       setGradableContractors(list);
-      if (list.length > 0) setGradeOpen(true); // auto-open on login if there are ungraded contractors
+      // Auto-open only if the pro hasn't dismissed it recently. Without the
+      // snooze this reopens on every single dashboard load, which is why it read
+      // as nagging rather than a prompt. The sidebar badge stays visible either
+      // way, so nothing is hidden — it just stops interrupting.
+      if (list.length > 0 && !isGradePromptSnoozed()) setGradeOpen(true);
     }).catch(() => {});
 
     // Re-fetch bookings when the trade pro returns to this tab
@@ -435,6 +463,7 @@ export default function TradeDashboard() {
           contractors={gradableContractors}
           onClose={() => {
             setGradeOpen(false);
+            snoozeGradePrompt();
             // Re-fetch so badge reflects any grades just submitted
             getGradableContractors()
               .then(setGradableContractors)
