@@ -596,15 +596,26 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
 
         <div>{renderMonth(viewYear, viewMonth)}</div>
 
-        {/* Booked-day action strip — one row PER SITE, so hours can be logged separately.
+        {/* Booked-day allocations — one card PER SITE, so hours can be logged separately.
             Sourced from messageBookings (same as the calendar cell) instead of raw
             TradePro.bookings, so a booking whose worker_offer confirmation never actually
-            went through (e.g. rejected for lacking open slots) doesn't show a phantom row. */}
+            went through (e.g. rejected for lacking open slots) doesn't show a phantom row.
+
+            Rendered as a modal over the calendar, EXCEPT while rescheduling — that flow
+            needs the user to tap a green day on the calendar underneath, so the modal
+            steps aside and the confirm row shows inline instead. */}
         {activeBookedKey && (() => {
           const bookingsAtDate = getConfirmedBookingsAtDate(activeBookedKey);
           if (bookingsAtDate.length === 0) return null;
 
           const rescheduleTargetBk = bookingsAtDate.find((b) => bookingKeyOf(b) === rescheduleSiteKey);
+
+          const closeDay = () => {
+            setActiveBookedKey(null);
+            setRescheduleMode(false);
+            setRescheduleSiteKey(null);
+            setRescheduleNewKey(null);
+          };
 
           const handleRescheduleConfirm = async () => {
             if (!rescheduleNewKey || !rescheduleTargetBk || rescheduling) return;
@@ -624,191 +635,258 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
             } finally { setRescheduling(false); }
           };
 
-          return (
-            <div className="mx-4 mb-3 space-y-2">
-              {bookingsAtDate.map((bk) => {
-                const bkKey = bookingKeyOf(bk);
-                const isPendingDeposit = !bk.siteId && bk.contractorId &&
-                  !depositedSet.has(`${String(bk.contractorId)}_${activeBookedKey}`);
-                const isRowRescheduling = rescheduleMode && rescheduleSiteKey === bkKey;
-                const status     = clockStatus[bkKey] || { disabled: false, checking: false, reason: null };
-                const isActive   = timerRunning && bgTimerRef.current.bookingKey === bkKey;
-                const isDisabled = status.disabled && !isActive; // never disable if timer is already running
-                const noDeposit  = status.reason === 'no_deposit'; // clickable — explains itself via popup, not greyed out
-                const clockTitle = status.checking  ? 'Checking…'
-                                 : status.reason === 'approved'            ? 'Hours already approved for this day ✅'
-                                 : status.reason === 'pending_submission'  ? 'Hours already submitted — awaiting approval 🕐'
-                                 : noDeposit         ? 'No deposit held for this job — tap for details 💳'
-                                 : isActive          ? 'Timer running — tap to open'
-                                 :                     'Log working hours';
+          const headingDate = (() => {
+            const d = new Date(activeBookedKey + 'T12:00:00');
+            return isNaN(d) ? activeBookedKey : d.toLocaleDateString(lang === 'es' ? 'es-ES' : 'en-US', {
+              weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+            });
+          })();
 
-                const handleClockClick = () => {
-                  if (isDisabled || status.checking) return;
-                  if (noDeposit) {
-                    Swal.fire({
-                      icon:  'warning',
-                      title: "Can't start working yet",
-                      text:  "We can't start working because there is no deposit for that job.",
-                      confirmButtonText: 'Got it',
-                      confirmButtonColor: '#f59e0b',
-                      customClass: { popup: 'rounded-3xl' },
-                    });
-                    return;
-                  }
-                  setWorkingHoursTargetKey(bkKey);
-                };
-
-                const handleRowChat = async () => {
-                  if (!bk.siteId) { toast.warning('No site ID on this booking'); return; }
-                  try {
-                    const result = await getTradeChatBySite(String(bk.siteId));
-                    setChatHistory(result?.chat?.messages ?? []);
-                    setChatContractorId(String(result?.contractorId ?? ''));
-                  } catch (err) {
-                    console.error('Chat load error', err);
-                    setChatHistory([]);
-                  }
-                  setChatOpen(bkKey);
-                };
-
-                const handleRowDelete = async () => {
-                  if (deletingKey) return;
-                  if (!window.confirm(`Remove your booking for "${bk.siteName}"?`)) return;
-                  setDeletingKey(bkKey);
-                  try {
-                    await removeBooking(bk.siteId);
-                    toast.success(`Booking removed for ${bk.siteName}`, { duration: 4000 });
-                    // Keep both data sources in sync — liveBookings drives the red/amber day
-                    // colour, messageBookings drives the calendar lines + this action strip.
-                    setLiveBookings((prev) => prev.filter((b) => bookingKeyOf(b) !== bkKey));
-                    setMessageBookings((prev) => prev.filter((m) =>
-                      !(m.date === activeBookedKey && (m.siteId ?? `direct:${m.contractorId}`) === (bk.siteId ?? `direct:${bk.contractorId}`))
-                    ));
-                    if (bookingsAtDate.length <= 1) {
-                      setActiveBookedKey(null);
-                      setRescheduleMode(false);
-                      setRescheduleSiteKey(null);
-                    }
-                  } catch { toast.error('Failed to remove booking', { duration: 4000 }); }
-                  finally { setDeletingKey(null); }
-                };
-
-                return (
-                  <div key={bkKey} className={`rounded-2xl border px-4 py-3 flex items-center gap-2 ${isRowRescheduling ? 'bg-violet-50 border-violet-200' : isPendingDeposit ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-bold truncate ${isRowRescheduling ? 'text-violet-700' : isPendingDeposit ? 'text-amber-700' : 'text-red-700'}`}>
-                        {isRowRescheduling ? '📅 Pick a new date on the calendar' : `${isPendingDeposit ? '💳' : '🔒'} ${bk.siteName}`}
-                      </p>
-                      {!isRowRescheduling && bk.siteAddress && <p className={`text-[10px] truncate mt-0.5 ${isPendingDeposit ? 'text-amber-400' : 'text-red-400'}`}>📍 {bk.siteAddress}</p>}
-                      {!isRowRescheduling && <p className={`text-[10px] mt-0.5 ${isPendingDeposit ? 'text-amber-400' : 'text-red-400'}`}>📅 {activeBookedKey} · 👷 {bk.workers_no ?? 1}</p>}
-                      {!isRowRescheduling && isPendingDeposit && <p className="text-[10px] text-amber-500 font-semibold mt-0.5">Waiting for contractor's deposit</p>}
-                      {isRowRescheduling && <p className="text-[10px] text-violet-400 mt-0.5">Tap any green day above ↑</p>}
-                    </div>
-
-                    {/* 💬 Chat */}
+          // While picking a new date the calendar must stay reachable, so only the
+          // slim confirm bar is shown inline and the modal is suppressed.
+          if (rescheduleMode) {
+            return (
+              <div className="mx-4 mb-3 space-y-2">
+                <div className="rounded-2xl bg-violet-50 border border-violet-200 px-4 py-3">
+                  <p className="text-xs font-bold text-violet-700">📅 Pick a new date for {rescheduleTargetBk?.siteName ?? 'this job'}</p>
+                  <p className="text-[10px] text-violet-400 mt-0.5">Tap any green day above ↑</p>
+                </div>
+                {rescheduleNewKey && rescheduleTargetBk && (
+                  <div className="rounded-2xl bg-violet-50 border border-violet-200 px-4 py-2.5 flex items-center gap-3">
+                    <p className="flex-1 text-xs font-semibold text-violet-700">
+                      Send request for <span className="font-extrabold">{rescheduleTargetBk.siteName}</span> on <span className="font-extrabold">{rescheduleNewKey}</span>?
+                    </p>
                     <button
-                      onClick={handleRowChat}
-                      title="Open chat"
-                      className="flex-shrink-0 w-8 h-8 rounded-xl bg-violet-500 hover:bg-violet-400 text-white flex items-center justify-center transition active:scale-95 shadow-sm shadow-violet-200"
+                      onClick={handleRescheduleConfirm}
+                      disabled={rescheduling}
+                      className="text-xs font-bold px-3 py-1.5 rounded-xl bg-violet-500 hover:bg-violet-400 text-white disabled:opacity-50 transition shadow-sm shadow-violet-200"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
+                      {rescheduling ? '…' : '✉️ Send'}
                     </button>
-
-                    {/* 📅 Update schedule */}
                     <button
-                      onClick={() => {
-                        if (isRowRescheduling) { setRescheduleMode(false); setRescheduleSiteKey(null); }
-                        else { setRescheduleMode(true); setRescheduleSiteKey(bkKey); }
-                        setRescheduleNewKey(null);
-                      }}
-                      title="Update schedule"
-                      className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition active:scale-95 shadow-sm ${isRowRescheduling ? 'bg-sky-500 text-white shadow-sky-200' : 'bg-sky-100 hover:bg-sky-200 text-sky-600'}`}
+                      onClick={() => { setRescheduleMode(false); setRescheduleSiteKey(null); setRescheduleNewKey(null); }}
+                      className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-500 transition"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </button>
-
-                    {/* ⏱️ Working hours — one clock PER SITE. A missing deposit keeps this
-                        clickable (not greyed out) so tapping it explains why via a popup;
-                        only 'approved'/'pending_submission'/checking states hard-disable it. */}
-                    <button
-                      onClick={handleClockClick}
-                      disabled={isDisabled || status.checking}
-                      title={clockTitle}
-                      className={`relative flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition shadow-sm ${
-                        isDisabled || status.checking
-                          ? 'bg-slate-100 text-slate-300 cursor-not-allowed opacity-50'
-                          : isActive
-                            ? 'bg-violet-500 text-white shadow-violet-300 active:scale-95'
-                            : noDeposit
-                              ? 'bg-amber-100 hover:bg-amber-200 text-amber-600 shadow-amber-100 active:scale-95'
-                              : 'bg-violet-100 hover:bg-violet-200 text-violet-600 shadow-violet-100 active:scale-95'
-                      }`}
-                    >
-                      {isActive && !isDisabled && (
-                        <span className="absolute inset-0 rounded-xl bg-violet-400 animate-ping opacity-40 pointer-events-none" />
-                      )}
-                      {status.checking ? (
-                        <span className="w-3 h-3 border-2 border-slate-300 border-t-slate-400 rounded-full animate-spin" />
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 relative" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <circle cx="12" cy="12" r="9" strokeLinecap="round" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
-                        </svg>
-                      )}
-                    </button>
-
-                    {/* 🗑️ Delete booking */}
-                    <button
-                      onClick={handleRowDelete}
-                      disabled={deletingKey === bkKey}
-                      title="Remove booking"
-                      className="flex-shrink-0 w-8 h-8 rounded-xl bg-slate-100 hover:bg-red-100 text-slate-400 hover:text-red-500 flex items-center justify-center transition active:scale-95 disabled:opacity-40"
-                    >
-                      {deletingKey === bkKey ? (
-                        <span className="w-3 h-3 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
-                      ) : (
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      )}
+                      Cancel
                     </button>
                   </div>
-                );
-              })}
+                )}
+              </div>
+            );
+          }
 
-              {/* Reschedule confirm row — appears when a new date is picked for the targeted site */}
-              {rescheduleMode && rescheduleNewKey && rescheduleTargetBk && (
-                <div className="rounded-2xl bg-violet-50 border border-violet-200 px-4 py-2.5 flex items-center gap-3">
-                  <p className="flex-1 text-xs font-semibold text-violet-700">
-                    Send request for <span className="font-extrabold">{rescheduleTargetBk.siteName}</span> on <span className="font-extrabold">{rescheduleNewKey}</span>?
-                  </p>
+          return (
+            <div
+              className="fixed inset-0 z-[65] flex items-center justify-center p-3 bg-black/50 backdrop-blur-sm"
+              onClick={(e) => { if (e.target === e.currentTarget) closeDay(); }}
+            >
+              <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+
+                {/* Header — the date and how many jobs sit on it */}
+                <div className="bg-gradient-to-r from-red-500 to-rose-400 px-5 py-4 flex items-start justify-between gap-3 flex-shrink-0">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/70">Scheduled work</p>
+                    <h3 className="text-sm font-extrabold text-white leading-snug mt-0.5">{headingDate}</h3>
+                    <p className="text-[11px] text-white/80 mt-0.5">
+                      {bookingsAtDate.length} {bookingsAtDate.length === 1 ? 'job' : 'jobs'} ·{' '}
+                      {bookingsAtDate.reduce((sum, b) => sum + (b.workers_no ?? 1), 0)} 👷 total
+                    </p>
+                  </div>
                   <button
-                    onClick={handleRescheduleConfirm}
-                    disabled={rescheduling}
-                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-violet-500 hover:bg-violet-400 text-white disabled:opacity-50 transition shadow-sm shadow-violet-200"
-                  >
-                    {rescheduling ? '…' : '✉️ Send'}
-                  </button>
+                    onClick={closeDay}
+                    className="flex-shrink-0 w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-base leading-none transition"
+                  >×</button>
+                </div>
+
+                {/* One card per job allocation */}
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-slate-50">
+                  {bookingsAtDate.map((bk) => {
+                    const bkKey = bookingKeyOf(bk);
+                    const isPendingDeposit = !bk.siteId && bk.contractorId &&
+                      !depositedSet.has(`${String(bk.contractorId)}_${activeBookedKey}`);
+                    const status     = clockStatus[bkKey] || { disabled: false, checking: false, reason: null };
+                    const isActive   = timerRunning && bgTimerRef.current.bookingKey === bkKey;
+                    const isDisabled = status.disabled && !isActive; // never disable if timer is already running
+                    const noDeposit  = status.reason === 'no_deposit'; // clickable — explains itself via popup, not greyed out
+                    const clockTitle = status.checking  ? 'Checking…'
+                                     : status.reason === 'approved'            ? 'Hours already approved for this day ✅'
+                                     : status.reason === 'pending_submission'  ? 'Hours already submitted — awaiting approval 🕐'
+                                     : noDeposit         ? 'No deposit held for this job — tap for details 💳'
+                                     : isActive          ? 'Timer running — tap to open'
+                                     :                     'Log working hours';
+
+                    const handleClockClick = () => {
+                      if (isDisabled || status.checking) return;
+                      if (noDeposit) {
+                        Swal.fire({
+                          icon:  'warning',
+                          title: "Can't start working yet",
+                          text:  "We can't start working because there is no deposit for that job.",
+                          confirmButtonText: 'Got it',
+                          confirmButtonColor: '#f59e0b',
+                          customClass: { popup: 'rounded-3xl' },
+                        });
+                        return;
+                      }
+                      setWorkingHoursTargetKey(bkKey);
+                    };
+
+                    const handleRowChat = async () => {
+                      if (!bk.siteId) { toast.warning('No site ID on this booking'); return; }
+                      try {
+                        const result = await getTradeChatBySite(String(bk.siteId));
+                        setChatHistory(result?.chat?.messages ?? []);
+                        setChatContractorId(String(result?.contractorId ?? ''));
+                      } catch (err) {
+                        console.error('Chat load error', err);
+                        setChatHistory([]);
+                      }
+                      setChatOpen(bkKey);
+                    };
+
+                    const handleRowDelete = async () => {
+                      if (deletingKey) return;
+                      if (!window.confirm(`Remove your booking for "${bk.siteName}"?`)) return;
+                      setDeletingKey(bkKey);
+                      try {
+                        await removeBooking(bk.siteId);
+                        toast.success(`Booking removed for ${bk.siteName}`, { duration: 4000 });
+                        // Keep both data sources in sync — liveBookings drives the red/amber day
+                        // colour, messageBookings drives the calendar lines + this modal's cards.
+                        setLiveBookings((prev) => prev.filter((b) => bookingKeyOf(b) !== bkKey));
+                        setMessageBookings((prev) => prev.filter((m) =>
+                          !(m.date === activeBookedKey && (m.siteId ?? `direct:${m.contractorId}`) === (bk.siteId ?? `direct:${bk.contractorId}`))
+                        ));
+                        if (bookingsAtDate.length <= 1) {
+                          setActiveBookedKey(null);
+                          setRescheduleMode(false);
+                          setRescheduleSiteKey(null);
+                        }
+                      } catch { toast.error('Failed to remove booking', { duration: 4000 }); }
+                      finally { setDeletingKey(null); }
+                    };
+
+                    // Human-readable state for this allocation, so the card says what's
+                    // going on instead of leaving it encoded in a disabled button.
+                    const stateChip = isPendingDeposit
+                      ? { label: 'Waiting for contractor’s deposit', cls: 'bg-amber-100 text-amber-700 border-amber-200' }
+                      : status.checking                        ? { label: 'Checking…',                    cls: 'bg-slate-100 text-slate-500 border-slate-200' }
+                      : status.reason === 'approved'           ? { label: 'Hours approved ✅',            cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' }
+                      : status.reason === 'pending_submission' ? { label: 'Awaiting approval 🕐',         cls: 'bg-sky-100 text-sky-700 border-sky-200' }
+                      : status.reason === 'no_deposit'         ? { label: 'No deposit held 💳',           cls: 'bg-amber-100 text-amber-700 border-amber-200' }
+                      : isActive                               ? { label: 'Timer running ⏱️',             cls: 'bg-violet-100 text-violet-700 border-violet-200' }
+                      :                                          { label: 'Ready to log hours',          cls: 'bg-slate-100 text-slate-500 border-slate-200' };
+
+                    return (
+                      <div key={bkKey} className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+                        {/* Job identity */}
+                        <div className="px-4 pt-3.5 pb-3">
+                          <p className="text-sm font-extrabold text-slate-800 leading-snug">
+                            {isPendingDeposit ? '💳' : '🔒'} {bk.siteName}
+                          </p>
+                          {bk.siteAddress && (
+                            <p className="text-[11px] text-slate-400 mt-1 leading-snug">📍 {bk.siteAddress}</p>
+                          )}
+
+                          <div className="flex flex-wrap gap-1.5 mt-2.5">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                              👷 {bk.workers_no ?? 1} {(bk.workers_no ?? 1) === 1 ? 'worker' : 'workers'}
+                            </span>
+                            {bk.totalHours != null && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                                ⏱️ {bk.totalHours}h min
+                              </span>
+                            )}
+                          </div>
+
+                          <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full border mt-2 ${stateChip.cls}`}>
+                            {stateChip.label}
+                          </span>
+                        </div>
+
+                        {/* Actions — labelled, not bare icons, so each one is self-explanatory */}
+                        <div className="grid grid-cols-4 border-t border-slate-100 divide-x divide-slate-100">
+                          <button
+                            onClick={handleRowChat}
+                            title="Open chat"
+                            className="flex flex-col items-center gap-1 py-2.5 text-violet-600 hover:bg-violet-50 transition active:scale-95"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            <span className="text-[10px] font-bold">Chat</span>
+                          </button>
+
+                          <button
+                            onClick={() => { setRescheduleMode(true); setRescheduleSiteKey(bkKey); setRescheduleNewKey(null); }}
+                            title="Update schedule"
+                            className="flex flex-col items-center gap-1 py-2.5 text-sky-600 hover:bg-sky-50 transition active:scale-95"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-[10px] font-bold">Reschedule</span>
+                          </button>
+
+                          {/* Working hours — a missing deposit keeps this clickable (not greyed
+                              out) so tapping it explains why via a popup; only approved /
+                              pending_submission / checking states hard-disable it. */}
+                          <button
+                            onClick={handleClockClick}
+                            disabled={isDisabled || status.checking}
+                            title={clockTitle}
+                            className={`relative flex flex-col items-center gap-1 py-2.5 transition active:scale-95 ${
+                              isDisabled || status.checking
+                                ? 'text-slate-300 cursor-not-allowed'
+                                : isActive
+                                  ? 'text-white bg-violet-500 hover:bg-violet-400'
+                                  : noDeposit
+                                    ? 'text-amber-600 hover:bg-amber-50'
+                                    : 'text-violet-600 hover:bg-violet-50'
+                            }`}
+                          >
+                            {status.checking ? (
+                              <span className="w-4 h-4 border-2 border-slate-300 border-t-slate-400 rounded-full animate-spin" />
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <circle cx="12" cy="12" r="9" strokeLinecap="round" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 3" />
+                              </svg>
+                            )}
+                            <span className="text-[10px] font-bold">{isActive ? 'Running' : 'Hours'}</span>
+                          </button>
+
+                          <button
+                            onClick={handleRowDelete}
+                            disabled={deletingKey === bkKey}
+                            title="Remove booking"
+                            className="flex flex-col items-center gap-1 py-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 transition active:scale-95 disabled:opacity-40"
+                          >
+                            {deletingKey === bkKey ? (
+                              <span className="w-4 h-4 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
+                            ) : (
+                              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            )}
+                            <span className="text-[10px] font-bold">Remove</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Footer */}
+                <div className="px-4 py-3 border-t border-slate-100 bg-white flex-shrink-0">
                   <button
-                    onClick={() => { setRescheduleMode(false); setRescheduleSiteKey(null); setRescheduleNewKey(null); }}
-                    className="text-xs font-bold px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-500 transition"
+                    onClick={closeDay}
+                    className="w-full py-2 rounded-xl border border-slate-200 text-slate-500 font-semibold text-xs hover:bg-slate-50 transition"
                   >
-                    Cancel
+                    Close
                   </button>
                 </div>
-              )}
-
-              {/* Close the whole strip / deselect the day */}
-              <button
-                onClick={() => { setActiveBookedKey(null); setRescheduleMode(false); setRescheduleSiteKey(null); setRescheduleNewKey(null); }}
-                className="w-full text-center text-xs text-slate-400 hover:text-slate-600 py-1 transition"
-              >
-                × Close
-              </button>
+              </div>
             </div>
           );
         })()}
