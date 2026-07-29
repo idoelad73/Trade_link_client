@@ -38,6 +38,12 @@ const content = {
       tooLow:      (min) => `Minimum is ${min} hours`,
       invalid:     'Please enter a valid number',
     },
+    futureJob: {
+      title:   'The job date is later than today',
+      html:    (jobDate) => `This job is scheduled for <strong>${jobDate}</strong>.<br>You can start logging hours on that day.`,
+      confirm: 'Got it',
+      badge:   'Starts in the future',
+    },
   },
   es: {
     badge:  '⏱️ Registro de Trabajo',
@@ -70,6 +76,12 @@ const content = {
       tooLow:      (min) => `El mínimo es ${min} horas`,
       invalid:     'Por favor ingresa un número válido',
     },
+    futureJob: {
+      title:   'La fecha del trabajo es posterior a hoy',
+      html:    (jobDate) => `Este trabajo está programado para el <strong>${jobDate}</strong>.<br>Podrás registrar horas ese día.`,
+      confirm: 'Entendido',
+      badge:   'Comienza en el futuro',
+    },
   },
 };
 
@@ -89,6 +101,13 @@ function currentBgSeconds(bgTimer) {
     return bgTimer.acc + Math.floor((Date.now() - bgTimer.start) / 1000);
   }
   return bgTimer.acc;
+}
+// Today as a local YYYY-MM-DD key. Built from local getters rather than
+// toISOString(), which converts to UTC and would report tomorrow's date for
+// anyone east of UTC late in the day (and yesterday's for anyone west of it).
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -146,9 +165,27 @@ export default function WorkingHoursModal({
     return () => document.removeEventListener('keydown', h);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Hours can't be logged before the job's scheduled day. Compared as plain
+  // YYYY-MM-DD strings (lexicographic order matches chronological order for
+  // ISO dates), so no timezone shifting is involved. A job dated today or in
+  // the past is fine — only a future date blocks the timer.
+  const isFutureJob = !!date && date > todayKey();
+
   // ── Timer controls ────────────────────────────────────────────────────────
   const handleStart = () => {
     if (isRunning) return;
+    if (isFutureJob) {
+      const fj = t.futureJob;
+      Swal.fire({
+        icon:  'warning',
+        title: fj.title,
+        html:  fj.html(date),
+        confirmButtonText:  fj.confirm,
+        confirmButtonColor: '#f59e0b',
+        customClass: { popup: 'rounded-3xl' },
+      });
+      return;
+    }
     bgTimerRef.current.start = Date.now();
     bgTimerRef.current.bookingKey = timerKey;
     setIsRunning(true);
@@ -299,6 +336,11 @@ export default function WorkingHoursModal({
               <span className="font-bold text-slate-400">Min</span> {totalHours}h required
             </span>
           )}
+          {/* Flags a future-dated job up front, so the block isn't a surprise
+              only discovered by pressing Start. */}
+          {isFutureJob && (
+            <span className="text-[11px] font-semibold text-amber-600">📅 {t.futureJob.badge}</span>
+          )}
         </div>
 
         {/* Clock + status */}
@@ -357,8 +399,15 @@ export default function WorkingHoursModal({
         {/* Buttons */}
         <div className="px-4 pb-3 space-y-2">
           <div className="grid grid-cols-2 gap-2">
+            {/* Left enabled on a future-dated job so the tap can explain itself via
+                the popup — a disabled button emits no click and would just look broken. */}
             <button onClick={handleStart} disabled={isRunning || sent}
-              className="flex items-center justify-center gap-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow shadow-emerald-200 transition-all active:scale-95">
+              title={isFutureJob ? t.futureJob.title : undefined}
+              className={`flex items-center justify-center gap-1 py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm transition-all active:scale-95 ${
+                isFutureJob
+                  ? 'bg-amber-500 hover:bg-amber-400 shadow shadow-amber-200'
+                  : 'bg-emerald-500 hover:bg-emerald-400 shadow shadow-emerald-200'
+              }`}>
               {t.btn.start}
             </button>
             <button onClick={handleStop} disabled={!isRunning}
