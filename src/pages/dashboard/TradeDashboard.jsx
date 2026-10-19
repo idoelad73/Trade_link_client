@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
+import { logout } from '../../api/auth.js';
 import Swal from 'sweetalert2';
 import { getMe, updateLocation, getPaymentApprovedCount, getApprovedOrderDates, getDepositedRequests, getGradableContractors, getPayoutBlocked } from '../../api/trade.js';
 import { completeOnboarding, startOnboarding } from '../../api/tradeStripe.js';
@@ -58,7 +59,7 @@ function snoozeGradePrompt() {
 
 export default function TradeDashboard() {
   const navigate = useNavigate();
-  const { user, clearAuth } = useAuthStore();
+  const { user } = useAuthStore();
   const lang = useUIStore((s) => s.lang);
   const t = content[lang];
 
@@ -319,7 +320,7 @@ export default function TradeDashboard() {
 
           {/* Logout */}
           <div className="px-3 pb-5 pt-2 border-t border-slate-100">
-            <button onClick={() => { clearAuth(); navigate('/'); }}
+            <button onClick={() => { logout(); navigate('/'); }}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-all">
               🚪 <span>{t.logOut}</span>
             </button>
@@ -422,7 +423,7 @@ export default function TradeDashboard() {
             </button>
 
             <button
-              onClick={() => { clearAuth(); navigate('/'); }}
+              onClick={() => { logout(); navigate('/'); }}
               className="flex items-center gap-1 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 px-2 sm:px-3 py-2 rounded-xl transition"
             >
               🚪<span className="hidden sm:inline"> {t.logOut}</span>

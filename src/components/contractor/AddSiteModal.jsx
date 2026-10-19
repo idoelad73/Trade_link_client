@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createSite } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
 import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
+import RateCommentModal from '../shared/RateCommentModal.jsx';
 import api from '../../api/axios.js';
 
 const DAYS = {
@@ -189,6 +190,8 @@ const content = {
       next:       'Next: Pick Date →',
       skip:       'No budget',
       cancel:     'Cancel',
+      comment:    '💬 Rate Comments',
+      commentSet: '💬 Rate Comments ✓',
     },
     datePick: {
       badge:   '📅 Required Date',
@@ -230,6 +233,8 @@ const content = {
       next:       'Siguiente: Elegir Fecha →',
       skip:       'Sin presupuesto',
       cancel:     'Cancelar',
+      comment:    '💬 Comentarios de Tarifa',
+      commentSet: '💬 Comentarios de Tarifa ✓',
     },
     datePick: {
       badge:   '📅 Fecha Requerida',
@@ -279,6 +284,8 @@ export default function AddSiteModal({ onClose, onCreated }) {
   const [budgetType,    setBudgetType]    = useState('amount');
   const [budgetValue,   setBudgetValue]   = useState('');
   const [workersValue,  setWorkersValue]  = useState('');
+  const [rateComment,   setRateComment]   = useState('');
+  const [commentOpen,   setCommentOpen]   = useState(false);
 
   // date picker mini-modal (step 2)
   const [pendingDateEntry, setPendingDateEntry] = useState(null);
@@ -294,13 +301,16 @@ export default function AddSiteModal({ onClose, onCreated }) {
   useEffect(() => {
     const h = (e) => {
       if (e.key !== 'Escape') return;
+      // The comment editor closes itself; bail so this handler doesn't also
+      // tear down the budget step or the whole modal in the same keypress.
+      if (commentOpen)      { return; }
       if (pendingDateEntry) { setPendingDateEntry(null); return; }
       if (pendingTrade)     { setPendingTrade(null);     return; }
       onClose();
     };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [onClose, pendingTrade, pendingDateEntry]);
+  }, [onClose, pendingTrade, pendingDateEntry, commentOpen]);
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
 
@@ -313,11 +323,14 @@ export default function AddSiteModal({ onClose, onCreated }) {
       setBudgetType('amount');
       setBudgetValue('');
       setWorkersValue('');
+      setRateComment('');
     }
   };
 
   const confirmBudget = (skip = false) => {
-    const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null, workers_no: null };
+    // rateComment is kept even when the budget itself is skipped — the
+    // explanation can be useful on its own ("priced on site visit", etc.).
+    const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null, workers_no: null, rateComment: rateComment.trim() };
     if (!skip && budgetValue) {
       const num = parseFloat(budgetValue);
       if (!isNaN(num) && num > 0) {
@@ -529,6 +542,20 @@ export default function AddSiteModal({ onClose, onCreated }) {
                   className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-300 transition"
                 />
               </div>
+
+              {/* Free-text explanation of how this rate was set — travels with the
+                  trade entry and is shown read-only to trade pros on job cards. */}
+              <button
+                type="button"
+                onClick={() => setCommentOpen(true)}
+                className={`w-full mb-5 py-2.5 rounded-xl text-xs font-bold border-2 transition ${
+                  rateComment.trim()
+                    ? 'bg-amber-50 border-amber-400 text-amber-700'
+                    : 'bg-white border-slate-200 text-slate-500 hover:border-amber-300'
+                }`}
+              >
+                {rateComment.trim() ? tb.commentSet : tb.comment}
+              </button>
             </div>
 
             <div className="px-6 pb-5 flex gap-2">
@@ -547,6 +574,16 @@ export default function AddSiteModal({ onClose, onCreated }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Rate comment editor (sits above the budget step) ─── */}
+      {commentOpen && (
+        <RateCommentModal
+          tradeName={pendingTrade}
+          value={rateComment}
+          onSave={setRateComment}
+          onClose={() => setCommentOpen(false)}
+        />
       )}
 
       {/* ── Date picker mini-modal ───────────────────────────── */}

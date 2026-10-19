@@ -94,6 +94,12 @@ const content = {
     saved:    '✓ Schedule saved',
     tapHint:  'Tap any day to change your availability',
     radius:   { title: 'Work Radius', desc: 'How far are you willing to travel?' },
+    searchTitle:  '🔍 Find Your Next Job',
+    searchDesc:   'Pick the project type, your radius and the contractor rating you want, then search',
+    siteType: { title: '🏗️ Project Type', desc: 'Which kind of projects do you want?', any: 'Any', residential: 'Residential', commercial: 'Commercial' },
+    rating:   { title: '⭐ Contractor Rating', desc: 'Minimum grade to show' },
+    ratingAny:    'Any',
+    ratingAndUp:  (n) => `${n}★ & up`,
     findJob:      'Find a Job',
     within:       'within',
     searching:    'Searching…',
@@ -124,6 +130,12 @@ const content = {
     saved:    '✓ Calendario guardado',
     tapHint:  'Toca cualquier día para cambiar tu disponibilidad',
     radius:   { title: 'Radio de Trabajo', desc: '¿Qué tan lejos estás dispuesto a viajar?' },
+    searchTitle:  '🔍 Encuentra tu Próximo Trabajo',
+    searchDesc:   'Elige el tipo de proyecto, tu radio y la calificación del contratista, luego busca',
+    siteType: { title: '🏗️ Tipo de Proyecto', desc: '¿Qué tipo de proyectos buscas?', any: 'Cualquiera', residential: 'Residencial', commercial: 'Comercial' },
+    rating:   { title: '⭐ Calificación del Contratista', desc: 'Calificación mínima a mostrar' },
+    ratingAny:    'Cualquiera',
+    ratingAndUp:  (n) => `${n}★ o más`,
     findJob:      'Buscar Trabajo',
     within:       'en',
     searching:    'Buscando…',
@@ -245,8 +257,10 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
   const [saving,   setSaving]   = useState(false);
   const [saved,    setSaved]    = useState(false);
 
-  const [unit,     setUnit]     = useState('mi');
-  const [distance, setDistance] = useState(25);
+  const [unit,      setUnit]      = useState('mi');
+  const [distance,  setDistance]  = useState(25);
+  const [minGrade,  setMinGrade]  = useState(0); // 0 = any contractor rating
+  const [siteType,  setSiteType]  = useState(null); // null = any project type
 
   const [jobsLoading,  setJobsLoading]  = useState(false);
   const [jobError,     setJobError]     = useState('');
@@ -362,7 +376,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
     setJobsLoading(true);
     setJobError('');
     try {
-      const data = await findJobs(distance, unit);
+      const data = await findJobs(distance, unit, minGrade > 0 ? minGrade : null, siteType);
       // Mark required dates orange on the calendar (visible when user returns)
       const reqDates = new Set(data.results.map(r => r.tradeEntry?.requiredDate).filter(Boolean));
       setPendingDates(reqDates);
@@ -384,7 +398,7 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
     } finally {
       setJobsLoading(false);
     }
-  }, [distance, unit, t, navigate]);
+  }, [distance, unit, minGrade, siteType, t, navigate]);
 
 
   const todayKey = toDateKey(today.getFullYear(), today.getMonth(), today.getDate());
@@ -564,6 +578,121 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6">
+
+      {/* ── Job search — kept above the calendar so the primary action is the
+             first thing on the page, mirroring the contractor dashboard's
+             search-first layout. Styled in the trade page's sky palette. ──── */}
+      <div>
+        <div className="mb-2">
+          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-800">{t.searchTitle}</h1>
+          <p className="text-slate-500 text-xs sm:text-sm mt-0.5">{t.searchDesc}</p>
+        </div>
+
+        <div className="bg-white/80 backdrop-blur-sm rounded-3xl border border-sky-100 shadow-md px-6 py-5 space-y-5">
+
+          {/* Project type — first filter */}
+          <div>
+            <div className="mb-3">
+              <h3 className="text-sm font-bold text-slate-700">{t.siteType.title}</h3>
+              <p className="text-xs text-slate-400 mt-0.5">{t.siteType.desc}</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                [null,          t.siteType.any],
+                ['residential', `🏠 ${t.siteType.residential}`],
+                ['commercial',  `🏢 ${t.siteType.commercial}`],
+              ].map(([value, label]) => (
+                <button key={label} type="button" onClick={() => setSiteType(value)}
+                  className={`py-2.5 rounded-xl border-2 text-xs sm:text-sm font-bold transition-all active:scale-95 ${
+                    siteType === value
+                      ? 'border-sky-400 bg-sky-50 text-sky-700 shadow-sm'
+                      : 'border-slate-100 bg-white text-slate-500 hover:border-sky-200'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Work radius */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-700">{t.radius.title}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{t.radius.desc}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-extrabold text-sky-500">{displayDist}</span>
+                <div className="flex items-center bg-slate-100 rounded-xl p-0.5">
+                  {['mi', 'km'].map((u) => (
+                    <button key={u} onClick={() => setUnit(u)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 ${unit === u ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <input type="range" min={5} max={200} step={5} value={distance} onChange={(e) => setDistance(Number(e.target.value))}
+              className="w-full h-2 rounded-full appearance-none cursor-pointer accent-sky-500"
+              style={{ background: `linear-gradient(to right, #0ea5e9 0%, #0ea5e9 ${((distance - 5) / 195) * 100}%, #e0f2fe ${((distance - 5) / 195) * 100}%, #e0f2fe 100%)` }}
+            />
+            <div className="flex justify-between text-xs text-slate-400 mt-1 px-0.5">
+              <span>5 {unit}</span><span>200 {unit}</span>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100" />
+
+          {/* Minimum contractor rating */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-700">{t.rating.title}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{t.rating.desc}</p>
+              </div>
+              <span className={`text-lg font-extrabold ${minGrade > 0 ? 'text-amber-500' : 'text-slate-400'}`}>
+                {minGrade > 0 ? t.ratingAndUp(minGrade) : t.ratingAny}
+              </span>
+            </div>
+            <input
+              type="range" min={0} max={5} step={1} value={minGrade}
+              onChange={(e) => setMinGrade(Number(e.target.value))}
+              className="w-full h-2 rounded-full appearance-none cursor-pointer"
+              style={{ background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${(minGrade / 5) * 100}%, #fde68a ${(minGrade / 5) * 100}%, #fde68a 100%)` }}
+            />
+            <div className="flex justify-between text-xs text-slate-400 mt-1 px-0.5">
+              <span>{t.ratingAny}</span>
+              <div className="flex gap-3.5 text-slate-300">
+                {[1, 2, 3, 4, 5].map((n) => <span key={n}>{n}</span>)}
+              </div>
+              <span>⭐ 5</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleFindJobs}
+            disabled={jobsLoading}
+            className="w-full bg-gradient-to-r from-amber-500 via-amber-400 to-sky-400 hover:from-amber-400 hover:to-sky-300 disabled:opacity-70 text-white font-extrabold text-sm sm:text-base py-3.5 sm:py-4 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-[0.99] tracking-wide flex items-center justify-center gap-2 sm:gap-3 mt-2"
+          >
+            {jobsLoading ? (
+              <><span className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />{t.searching}</>
+            ) : (
+              <><span className="text-lg sm:text-xl">🔍</span>{t.findJob}<span className="text-xs sm:text-sm font-normal opacity-80 hidden xs:inline sm:inline">{t.within} {displayDist}</span></>
+            )}
+          </button>
+        </div>
+
+        {/* Error banner (location / network error) — kept with the search panel
+            it belongs to, rather than stranded further down the page. */}
+        {jobError && (
+          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 text-sm text-amber-700 font-medium text-center">
+            {jobError}
+          </div>
+        )}
+      </div>
 
       {/* Calendar */}
       <div className="bg-white/80 backdrop-blur-sm rounded-3xl border border-sky-100 shadow-md overflow-hidden">
@@ -903,57 +1032,6 @@ export default function TradeSchedule({ initialBusyDays = [], initialBookings = 
         </div>
       </div>
 
-      {/* Distance & Find Job */}
-      <div className="bg-white/80 backdrop-blur-sm rounded-3xl border border-amber-100 shadow-md px-6 py-6 space-y-5">
-
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-slate-700">{t.radius.title}</h3>
-            <p className="text-xs text-slate-400 mt-0.5">{t.radius.desc}</p>
-          </div>
-          <div className="flex items-center bg-slate-100 rounded-xl p-0.5">
-            {['mi', 'km'].map((u) => (
-              <button key={u} onClick={() => setUnit(u)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 ${unit === u ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-                {u}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="text-center">
-          <span className="text-3xl sm:text-4xl font-extrabold text-sky-500">{displayDist}</span>
-        </div>
-
-        <div>
-          <input type="range" min={5} max={200} step={5} value={distance} onChange={(e) => setDistance(Number(e.target.value))}
-            className="w-full h-2 rounded-full appearance-none cursor-pointer accent-sky-500"
-            style={{ background: `linear-gradient(to right, #0ea5e9 0%, #0ea5e9 ${((distance - 5) / 195) * 100}%, #e0f2fe ${((distance - 5) / 195) * 100}%, #e0f2fe 100%)` }}
-          />
-          <div className="flex justify-between text-xs text-slate-400 mt-1 px-0.5">
-            <span>5 {unit}</span><span>200 {unit}</span>
-          </div>
-        </div>
-
-        <button
-          onClick={handleFindJobs}
-          disabled={jobsLoading}
-          className="w-full bg-gradient-to-r from-amber-500 via-amber-400 to-sky-400 hover:from-amber-400 hover:to-sky-300 disabled:opacity-70 text-white font-extrabold text-sm sm:text-base py-3.5 sm:py-4 rounded-2xl shadow-lg shadow-amber-200 transition-all active:scale-[0.99] tracking-wide flex items-center justify-center gap-2 sm:gap-3 mt-2"
-        >
-          {jobsLoading ? (
-            <><span className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />{t.searching}</>
-          ) : (
-            <><span className="text-lg sm:text-xl">🔍</span>{t.findJob}<span className="text-xs sm:text-sm font-normal opacity-80 hidden xs:inline sm:inline">{t.within} {displayDist}</span></>
-          )}
-        </button>
-      </div>
-
-      {/* Error banner (location / network error) */}
-      {jobError && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 text-sm text-amber-700 font-medium text-center">
-          {jobError}
-        </div>
-      )}
       {/* ── Real-time chat panel (bottom-left, half width) ───────────────── */}
       {/* ── Working-hours modal — targets one specific site's booking ──────── */}
       {workingHoursTargetKey && activeBookedKey && (() => {

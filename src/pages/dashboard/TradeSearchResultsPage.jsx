@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import useUIStore from '../../stores/uiStore.js';
 import TradeCalendarModal from '../../components/contractor/TradeCalendarModal.jsx';
 import { getWorkersLeft } from '../../api/contractor.js';
+import useTradeRate from '../../hooks/useTradeRate.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatDistance(meters, unit) {
@@ -80,6 +81,7 @@ const content = {
     busy:      'Busy today',
     available: 'Available',
     openCal:   'Schedule',
+    typical:   'Typical',
   },
   es: {
     back:      '← Volver a Proyectos',
@@ -90,11 +92,12 @@ const content = {
     busy:      'Ocupado hoy',
     available: 'Disponible',
     openCal:   'Agendar',
+    typical:   'Típica',
   },
 };
 
 // ── Pro card ──────────────────────────────────────────────────────────────────
-function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, onOpenCalendar, onOpenProfile }) {
+function ProCard({ pro, unit, t, siteName, tradeEntry = {}, typicalRate, slotsLeft, isFull, onOpenCalendar, onOpenProfile }) {
   const busy        = isBusyToday(pro.busyDays);
   const siteBooking = pro.bookings?.find((b) => b.siteName === siteName);
 
@@ -156,6 +159,11 @@ function ProCard({ pro, unit, t, siteName, tradeEntry = {}, slotsLeft, isFull, o
         ) : (
           <span className="text-xs text-slate-300 italic">No rate</span>
         )}
+        {typicalRate && (
+          <span className="text-[11px] font-semibold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-full whitespace-nowrap">
+            📊 {t.typical} ${typicalRate.rateLow}–{typicalRate.rateHigh}/hr
+          </span>
+        )}
         <div className="ml-auto flex-shrink-0 flex items-center gap-2">
           {slotsLeft != null && !isFull && (
             <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full whitespace-nowrap">
@@ -197,6 +205,7 @@ export default function TradeSearchResultsPage() {
   const unit         = state?.unit         ?? 'mi';
   const mySiteNames  = state?.mySiteNames  ?? [];
   const directSearch = state?.directSearch ?? false;
+  const typicalRate  = useTradeRate(trade);
 
   const [calendarPro, setCalendarPro] = useState(null);
   const [slotsInfo,   setSlotsInfo]   = useState(null); // { workersLeft, isFull }
@@ -254,6 +263,7 @@ export default function TradeSearchResultsPage() {
                 t={t}
                 siteName={siteName}
                 tradeEntry={tradeEntry}
+                typicalRate={typicalRate}
                 slotsLeft={slotsInfo?.workersLeft ?? null}
                 isFull={slotsInfo?.isFull ?? false}
                 onOpenCalendar={(proId) =>

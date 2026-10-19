@@ -254,7 +254,10 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
           {workerOffers.length > 0 && (
             <div className={`${applications.length > 0 ? 'mt-5' : ''} space-y-3`}>
               <p className="text-xs font-bold text-orange-500 uppercase tracking-wide px-1">
-                👷 Worker Offers — Pending Approval
+                👷 Worker Offers
+                {workerOffers.some((o) => o.status === 'pending')
+                  ? ` — ${workerOffers.filter((o) => o.status === 'pending').length} Pending Approval`
+                  : ' — All Approved'}
               </p>
               {workerOffers.map((offer) => {
                 const tradeSlot   = offer.site?.tradesNeeded?.find(
@@ -269,10 +272,13 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                 const deposit     = (rate && totalHours)
                   ? parseFloat((workers * rate * totalHours).toFixed(2))
                   : null;
+                // Approved offers are kept in the list as a record of what the
+                // contractor confirmed — shown, but with no action attached.
+                const isApproved  = offer.status === 'approved';
 
                 return (
-                  <div key={offer._id} className="bg-white rounded-2xl border border-orange-200 shadow-sm overflow-hidden">
-                    <div className="h-1 w-full bg-gradient-to-r from-orange-400 to-amber-400" />
+                  <div key={offer._id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isApproved ? 'border-emerald-200' : 'border-orange-200'}`}>
+                    <div className={`h-1 w-full bg-gradient-to-r ${isApproved ? 'from-emerald-400 to-teal-400' : 'from-orange-400 to-amber-400'}`} />
                     {/* Trade pro header */}
                     <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-slate-50">
                       {offer.tradePro?.photo
@@ -283,8 +289,12 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                         <p className="font-extrabold text-slate-800 text-sm truncate">{offer.tradePro?.fullName}</p>
                         <p className="text-xs text-slate-400 truncate">🔧 {offer.tradePro?.professionality}</p>
                       </div>
-                      <span className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-orange-100 text-orange-600 border border-orange-200 whitespace-nowrap">
-                        ⏳ Pending
+                      <span className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap ${
+                        isApproved
+                          ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                          : 'bg-orange-100 text-orange-600 border-orange-200'
+                      }`}>
+                        {isApproved ? '✓ Approved' : '⏳ Pending'}
                       </span>
                     </div>
 
@@ -347,8 +357,13 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                       </div>
                     )}
 
-                    {/* Approve button */}
+                    {/* Approve button — only while the offer is still pending */}
                     <div className="px-4 pb-4">
+                      {isApproved ? (
+                        <p className="text-center text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl py-2">
+                          ✓ {workers} worker{workers !== 1 ? 's' : ''} confirmed
+                        </p>
+                      ) : (
                       <button
                         onClick={async () => {
                           setApprovingOffer(offer._id);
@@ -386,6 +401,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                       >
                         {approvingOffer === offer._id ? '…' : `✓ Approve ${workers} Worker${workers !== 1 ? 's' : ''}`}
                       </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -399,9 +415,12 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
               <p className="text-xs font-bold text-violet-500 uppercase tracking-wide px-1">
                 📅 Reschedule Requests
               </p>
-              {reschedules.map((msg) => (
-                <div key={msg._id} className="bg-white rounded-2xl border border-violet-200 shadow-sm overflow-hidden">
-                  <div className="h-1 w-full bg-gradient-to-r from-violet-400 to-sky-400" />
+              {reschedules.map((msg) => {
+                // Approved reschedules stay listed as a record, without actions.
+                const isApproved = msg.status === 'approved';
+                return (
+                <div key={msg._id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isApproved ? 'border-emerald-200' : 'border-violet-200'}`}>
+                  <div className={`h-1 w-full bg-gradient-to-r ${isApproved ? 'from-emerald-400 to-teal-400' : 'from-violet-400 to-sky-400'}`} />
                   {/* Trade pro info */}
                   <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-slate-50">
                     {msg.tradePro?.photo
@@ -412,8 +431,12 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                       <p className="font-extrabold text-slate-800 text-sm truncate">{msg.tradePro?.fullName}</p>
                       <p className="text-xs text-slate-400 truncate">🔧 {msg.tradePro?.professionality}</p>
                     </div>
-                    <span className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-100 text-violet-600 border border-violet-200">
-                      Reschedule
+                    <span className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                      isApproved
+                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                        : 'bg-violet-100 text-violet-600 border-violet-200'
+                    }`}>
+                      {isApproved ? '✓ Approved' : 'Reschedule'}
                     </span>
                   </div>
                   {/* Details */}
@@ -427,8 +450,13 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                       <p className="text-xs font-bold text-violet-700">📅 {msg.requestedDate}</p>
                     </div>
                   </div>
-                  {/* Actions */}
+                  {/* Actions — only while the request is still pending */}
                   <div className="px-4 pb-4 flex gap-2">
+                    {isApproved ? (
+                      <p className="flex-1 text-center text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl py-2">
+                        ✓ New date approved
+                      </p>
+                    ) : (<>
                     <button
                       onClick={async () => {
                         setActingReschedule(msg._id + '_approve');
@@ -460,9 +488,11 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
                     >
                       {actingReschedule === msg._id + '_decline' ? '…' : '✕ Decline'}
                     </button>
+                    </>)}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { applyToJob } from '../../api/trade.js';
 import useUIStore from '../../stores/uiStore.js';
+import RateCommentModal from '../../components/shared/RateCommentModal.jsx';
 import { toast } from '../../utils/toast.js';
 
 // ── Working-day helpers (duplicated from TradeSchedule) ──────────────────────
@@ -80,6 +81,7 @@ const content = {
     applyAssigned: (site) => `🔒 "${site}" has already been filled`,
     applyError:    'Failed to send. Please try again.',
     workers:       (n) => `${n} worker${n !== 1 ? 's' : ''}`,
+    rateComment:   'Rate comments from the contractor',
   },
   es: {
     back:          '← Volver al Calendario',
@@ -96,6 +98,7 @@ const content = {
     applyAssigned: (site) => `🔒 "${site}" ya fue cubierto`,
     applyError:    'Error al enviar. Inténtalo de nuevo.',
     workers:       (n) => `${n} trabajador${n !== 1 ? 'es' : ''}`,
+    rateComment:   'Comentarios de tarifa del contratista',
   },
 };
 
@@ -117,6 +120,9 @@ export default function JobResultsPage() {
   const [pendingJob,   setPendingJob]   = useState(null);   // job waiting for workers input
   const [workersCount, setWorkersCount] = useState('1');
   const [workersError, setWorkersError] = useState('');
+
+  // Read-only rate explanation written by the contractor — { tradeName, text }
+  const [rateCommentView, setRateCommentView] = useState(null);
 
   // Step 1 — called when button is clicked
   const handleApply = useCallback((job) => {
@@ -300,6 +306,18 @@ export default function JobResultsPage() {
                         ✅ Deposit held{te.depositAmount != null ? ` $${te.depositAmount}` : ''}
                       </span>
                     )}
+                    {/* Contractor's explanation of the rate — icon only, to keep
+                        the badge row compact. Hidden when nothing was written. */}
+                    {te?.rateComment?.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setRateCommentView({ tradeName: te.name ?? jobTrade, text: te.rateComment })}
+                        title={t.rateComment}
+                        className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition active:scale-95"
+                      >
+                        💬
+                      </button>
+                    )}
                   </div>
 
                   {/* Date info + Apply */}
@@ -414,6 +432,16 @@ export default function JobResultsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Read-only rate explanation, opened from a job card's 💬 */}
+      {rateCommentView && (
+        <RateCommentModal
+          tradeName={rateCommentView.tradeName}
+          value={rateCommentView.text}
+          readOnly
+          onClose={() => setRateCommentView(null)}
+        />
       )}
     </div>
   );

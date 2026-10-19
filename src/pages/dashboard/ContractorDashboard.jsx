@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
+import { logout } from '../../api/auth.js';
 import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades, getSiteDepositSummary, getPendingDeposits } from '../../api/contractor.js';
 import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
+import useTradeRate from '../../hooks/useTradeRate.js';
 import ContractorInfoModal from '../../components/contractor/ContractorInfoModal.jsx';
 import AddSiteModal from '../../components/contractor/AddSiteModal.jsx';
 import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx';
@@ -12,6 +14,8 @@ import UpdateSitePhotoModal from '../../components/contractor/UpdateSitePhotoMod
 import ContractorApplicationsModal from '../../components/contractor/ContractorApplicationsModal.jsx';
 import DepositSummaryModal from '../../components/contractor/DepositSummaryModal.jsx';
 import TradeGradesListModal from '../../components/contractor/TradeGradesListModal.jsx';
+import RateCommentModal from '../../components/shared/RateCommentModal.jsx';
+import SiteMessagesModal from '../../components/contractor/SiteMessagesModal.jsx';
 
 const content = {
   en: {
@@ -35,6 +39,7 @@ const content = {
       findBtn:     'Find',
       within:      'within',
       radius:      { title: 'Search Radius', desc: 'Maximum distance from your projects' },
+      rateCommentTitle: 'View rate comments',
     },
     results: {
       title:      (trade, site) => `${trade} professionals near project "${site}"`,
@@ -71,6 +76,7 @@ const content = {
       findBtn:     'Buscar',
       within:      'en',
       radius:      { title: 'Radio de Búsqueda', desc: 'Distancia máxima desde tus proyectos' },
+      rateCommentTitle: 'Ver comentarios de tarifa',
     },
     results: {
       title:      (trade, site) => `Profesionales de ${trade} cerca del proyecto "${site}"`,
@@ -182,7 +188,7 @@ function fmtDate(dateKey) {
 }
 
 // ── Site card with per-site trade picker ─────────────────────────────────────
-function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, onManageTrades, onUpdatePhoto, onWorkPlan, searchState }) {
+function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, onManageTrades, onUpdatePhoto, onWorkPlan, onViewRateComment, onSiteMessages, searchState }) {
   const statusLabel   = t.status[site.status] ?? site.status;
   const isSearching   = searchState?.loading;
   const hasNoTrades   = !site.tradesNeeded?.length;
@@ -211,6 +217,16 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
           className="absolute top-2 right-2 flex items-center gap-1 bg-white/90 hover:bg-white border border-slate-200 text-slate-600 hover:text-amber-600 text-xs font-semibold px-2.5 py-1 rounded-xl shadow-sm transition-all active:scale-95"
         >
           ✏️ Trades
+        </button>
+        {/* Messages status — sits directly under the Trades button. Read-only
+            audit trail of everything that happened on this project. */}
+        <button
+          type="button"
+          onClick={() => onSiteMessages(site)}
+          title="Messages status for this project"
+          className="absolute top-11 right-2 flex items-center gap-1 bg-white/90 hover:bg-white border border-slate-200 text-slate-600 hover:text-orange-600 text-xs font-semibold px-2.5 py-1 rounded-xl shadow-sm transition-all active:scale-95"
+        >
+          📬 Messages
         </button>
         {/* Work Plan button — top-left corner, shown when at least one trade is assigned */}
         {hasAssigned && (
@@ -271,8 +287,13 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
                 const isDepositHeld = tr.depositHeld === true;
                 const dateLabel     = fmtDate(tr.requiredDate);
                 return (
+                  // Relative wrapper so the rate-comment badge can sit on the
+                  // chip's corner as a SIBLING button. It used to be a
+                  // <span role="button"> nested inside the chip <button>, which
+                  // is invalid HTML (nested interactive content) and did not
+                  // reliably fire its click handler.
+                  <div key={tr.name} className="relative">
                   <button
-                    key={tr.name}
                     type="button"
                     onClick={() => {
                       if (isDepositHeld) return; // deposit done, no action
@@ -360,6 +381,21 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
                         )}
                       </span>
                   </button>
+
+                  {/* Rate comments — corner badge, so the chip stays compact.
+                      Only rendered when the contractor actually wrote one. */}
+                  {tr.rateComment?.trim() && (
+                    <button
+                      type="button"
+                      title={t.findTrade?.rateCommentTitle ?? 'View rate comments'}
+                      aria-label={`Rate comments for ${tr.name}`}
+                      onClick={() => onViewRateComment?.(tr.name, tr.rateComment)}
+                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border-2 border-amber-400 text-[11px] leading-none flex items-center justify-center shadow-sm hover:bg-amber-100 hover:scale-110 transition active:scale-95 z-10"
+                    >
+                      💬
+                    </button>
+                  )}
+                  </div>
                 );
               })}
             </div>
@@ -401,9 +437,10 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
 const MAX_RATE = 300;
 
 // ── Trade typeahead search bar ────────────────────────────────────────────────
-function TradeSearchBar({ tradeTypes, tradeFilter, setTradeFilter, onSearch }) {
+function TradeSearchBar({ tradeTypes, tradeFilter, setTradeFilter, onSearch, lang }) {
   const [input, setInput]   = useState(tradeFilter);
   const [open,  setOpen]    = useState(false);
+  const typicalRate         = useTradeRate(tradeFilter);
 
   const filtered = input.length > 0
     ? tradeTypes.filter((t) => t.toLowerCase().startsWith(input.toLowerCase()))
@@ -467,13 +504,20 @@ function TradeSearchBar({ tradeTypes, tradeFilter, setTradeFilter, onSearch }) {
 
         {/* Search button */}
         <button
-          onClick={onSearch}
-          disabled={!tradeFilter}
+          onClick={() => onSearch(tradeFilter || input.trim())}
+          disabled={!input.trim()}
           className="flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold px-5 py-2 rounded-xl shadow shadow-orange-200 transition-all active:scale-95 whitespace-nowrap"
         >
           🔍 Search for Trade
         </button>
       </div>
+
+      {typicalRate && (
+        <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 px-3 py-1.5 rounded-xl">
+          📊 {lang === 'es' ? `Tarifa típica de ${tradeFilter}:` : `Typical ${tradeFilter} rate:`}
+          <span className="font-extrabold">${typicalRate.rateLow}–{typicalRate.rateHigh}/hr</span>
+        </p>
+      )}
     </div>
   );
 }
@@ -582,7 +626,7 @@ function DistancePanel({ unit, setUnit, distance, setDistance, maxRate, setMaxRa
 // ── Dashboard ────────────────────────────────────────────────────────────────
 export default function ContractorDashboard() {
   const navigate = useNavigate();
-  const { user, clearAuth } = useAuthStore();
+  const { user } = useAuthStore();
   const lang = useUIStore((s) => s.lang);
   const t = content[lang];
 
@@ -615,14 +659,20 @@ export default function ContractorDashboard() {
   const [gradableTradesCount,  setGradableTradesCount]  = useState(0);    // for badge
   const [gradeLoading,         setGradeLoading]         = useState(false);
   const [tradeFilter,          setTradeFilter]          = useState('');
+  const [rateCommentView,      setRateCommentView]      = useState(null); // { tradeName, text }
+  const [messagesSite,         setMessagesSite]         = useState(null); // site whose messages modal is open
 
   const refreshApplicationCount = () =>
     getApplications()
       .then(({ applications = [], reschedules = [], workerOffers = [] }) =>
+        // Badge = outstanding work only. getApplications now also returns
+        // already-approved offers/reschedules so the contractor can review what
+        // they actioned, so every array has to be filtered here — counting
+        // .length would make the badge never clear.
         setApplicationsCount(
           applications.filter(a => a.status === 'pending').length +
-          reschedules.length +
-          workerOffers.length
+          reschedules.filter(r => r.status === 'pending').length +
+          workerOffers.filter(o => o.status === 'pending').length
         )
       ).catch(() => {});
 
@@ -748,29 +798,31 @@ export default function ContractorDashboard() {
     setSites((prev) => prev.map((s) => s._id === updatedSite._id ? updatedSite : s));
   };
 
-  const handleSearchForTrade = () => {
-    if (!tradeFilter) return;
-    const site = sites.find((s) => s.tradesNeeded?.some((tr) => tr.name === tradeFilter));
-    if (site) handleFind(site, tradeFilter, true);
+  const handleSearchForTrade = (query) => {
+    if (!query) return;
+    const trade = TRADE_PROFESSIONALITIES.find((t) => t.toLowerCase() === query.toLowerCase());
+    const site  = trade && sites.find((s) => s.tradesNeeded?.some((tr) => tr.name === trade));
+    if (site) return handleFind(site, trade, true);
+
+    // Unknown trade, or no project of this contractor needs it
+    Swal.fire({
+      icon:  'error',
+      title: lang === 'es' ? 'Oficio no encontrado' : 'Trade not found',
+      text:  lang === 'es'
+        ? `No existe el oficio "${query}". Por favor, elige otro.`
+        : `There is no such profession as "${query}". Please choose again.`,
+      showCloseButton:    true,
+      confirmButtonText:  lang === 'es' ? 'Cerrar' : 'Close',
+      confirmButtonColor: '#f59e0b',
+      customClass: { popup: 'rounded-3xl' },
+    });
   };
 
   const handleFind = async (site, trade, directSearch = false) => {
     const tradeEntry = site.tradesNeeded.find((t) => t.name === trade) || {};
 
-    // Project-card search requires a required date on the trade slot before we can search
-    if (!directSearch && !tradeEntry.requiredDate) {
-      Swal.fire({
-        icon:  'warning',
-        title: lang === 'es' ? 'Falta la fecha' : 'Date required',
-        text:  lang === 'es'
-          ? 'Debes agregar una fecha requerida a este oficio antes de buscar.'
-          : 'Date must be added for trade search.',
-        confirmButtonColor: '#f59e0b',
-        customClass: { popup: 'rounded-3xl' },
-      });
-      return;
-    }
-
+    // No date guard: the trade comes from the project card itself, and a slot
+    // without a requiredDate just searches without the date-availability filter.
     setSelection(null);
     setFindingFor({ siteId: site._id, trade });
     try {
@@ -899,7 +951,7 @@ export default function ContractorDashboard() {
 
           {/* Logout */}
           <div className="px-3 pb-5 pt-2 border-t border-slate-100">
-            <button onClick={() => { clearAuth(); navigate('/'); }}
+            <button onClick={() => { logout(); navigate('/'); }}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50 transition-all">
               🚪 <span>{t.logOut}</span>
             </button>
@@ -992,7 +1044,7 @@ export default function ContractorDashboard() {
                 }
               </div>
             </button>
-            <button onClick={() => { clearAuth(); navigate('/'); }}
+            <button onClick={() => { logout(); navigate('/'); }}
               className="flex items-center gap-1 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 px-2 sm:px-3 py-2 rounded-xl transition">
               🚪<span className="hidden sm:inline"> {t.logOut}</span>
             </button>
@@ -1068,6 +1120,7 @@ export default function ContractorDashboard() {
                     tradeFilter={tradeFilter}
                     setTradeFilter={setTradeFilter}
                     onSearch={handleSearchForTrade}
+                    lang={lang}
                   />
 
                   <div className="border-t border-slate-100 mb-5" />
@@ -1118,6 +1171,8 @@ export default function ContractorDashboard() {
                         onManageTrades={setManageSite}
                         onUpdatePhoto={setPhotoSite}
                         onWorkPlan={(siteId) => navigate(`/dashboard/contractor/work-plan/${siteId}`)}
+                        onViewRateComment={(tradeName, text) => setRateCommentView({ tradeName, text })}
+                        onSiteMessages={setMessagesSite}
                         searchState={findingFor?.siteId === site._id ? { loading: true } : null}
                       />
                     );
@@ -1150,6 +1205,24 @@ export default function ContractorDashboard() {
         <ContractorApplicationsModal
           onClose={() => setApplicationsOpen(false)}
           onApproved={() => { refreshApplicationCount(); refreshSites(); }}
+        />
+      )}
+
+      {/* All messages for one project, opened from the card's 📬 Messages */}
+      {messagesSite && (
+        <SiteMessagesModal
+          site={messagesSite}
+          onClose={() => setMessagesSite(null)}
+        />
+      )}
+
+      {/* Read-only view of a trade's rate explanation, opened from a chip's 💬 */}
+      {rateCommentView && (
+        <RateCommentModal
+          tradeName={rateCommentView.tradeName}
+          value={rateCommentView.text}
+          readOnly
+          onClose={() => setRateCommentView(null)}
         />
       )}
 

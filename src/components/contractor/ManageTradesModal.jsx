@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { updateSite } from '../../api/contractor.js';
 import useUIStore from '../../stores/uiStore.js';
 import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
+import RateCommentModal from '../shared/RateCommentModal.jsx';
 
 const DAYS = {
   en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
@@ -52,6 +53,8 @@ const content = {
       next:       'Next: Pick Date →',
       skip:       'No budget',
       cancel:     'Cancel',
+      comment:    '💬 Rate Comments',
+      commentSet: '💬 Rate Comments ✓',
     },
     datePick: {
       badge:   '📅 Required Date',
@@ -97,6 +100,8 @@ const content = {
       next:       'Siguiente: Elegir Fecha →',
       skip:       'Sin presupuesto',
       cancel:     'Cancelar',
+      comment:    '💬 Comentarios de Tarifa',
+      commentSet: '💬 Comentarios de Tarifa ✓',
     },
     datePick: {
       badge:   '📅 Fecha Requerida',
@@ -172,6 +177,11 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   const [budgetValue,   setBudgetValue]   = useState('');
   const [workersValue,  setWorkersValue]  = useState('');
   const [budgetError,   setBudgetError]   = useState('');
+  const [rateComment,   setRateComment]   = useState('');
+
+  // Rate-comment editor — shared by the ADD (step 1) and EDIT flows.
+  // `commentTarget` is 'add' | 'edit' | null so the right state gets written.
+  const [commentTarget, setCommentTarget] = useState(null);
 
   // ── ADD flow: Step 2 — date picker ─────────────────────────
   const [pendingDateEntry, setPendingDateEntry] = useState(null);
@@ -187,6 +197,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   const [tiWorkersValue,  setTiWorkersValue]  = useState('');
   const [tiError,         setTiError]         = useState('');
   const [tiSelectedDate,  setTiSelectedDate]  = useState(null);
+  const [tiRateComment,   setTiRateComment]   = useState('');
   const [tiViewYear,      setTiViewYear]      = useState(today.getFullYear());
   const [tiViewMonth,     setTiViewMonth]     = useState(today.getMonth());
 
@@ -203,6 +214,9 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
   useEffect(() => {
     const h = (e) => {
       if (e.key !== 'Escape') return;
+      // The comment editor closes itself; bail so this handler doesn't also
+      // tear down the layer underneath in the same keypress.
+      if (commentTarget)    { return; }
       if (tradeInfoOpen)    { setTradeInfoOpen(false); setTiError(''); return; }
       if (pendingDateEntry) { setPendingDateEntry(null); return; }
       if (pendingTrade)     { setPendingTrade(null);     return; }
@@ -210,7 +224,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
     };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [onClose, pendingTrade, pendingDateEntry, tradeInfoOpen]);
+  }, [onClose, pendingTrade, pendingDateEntry, tradeInfoOpen, commentTarget]);
 
   // ── ADD flow handlers ──────────────────────────────────────
   const openBudgetModal = (name) => {
@@ -218,6 +232,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
     setBudgetType('amount');
     setBudgetValue('');
     setWorkersValue('');
+    setRateComment('');
   };
 
   const confirmBudget = (skip = false) => {
@@ -240,7 +255,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
       }
     }
 
-    const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null, totalWorkingHrs: null, workers_no: null };
+    const entry = { name: pendingTrade, assigned: false, budgetType: null, maxAmount: null, totalHours: null, totalWorkingHrs: null, workers_no: null, rateComment: rateComment.trim() };
     if (!skip && budgetValue) {
       const num = parseFloat(budgetValue);
       if (!isNaN(num) && num > 0) {
@@ -282,6 +297,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
       tr.budgetType === 'hours'  ? (tr.totalHours?.toString() ?? '') : ''
     );
     setTiWorkersValue(tr.workers_no ? tr.workers_no.toString() : '');
+    setTiRateComment(tr.rateComment ?? '');
     const preDate = tr.requiredDate ?? null;
     setTiSelectedDate(preDate);
     if (preDate) {
@@ -311,6 +327,7 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
       totalWorkingHrs,
       requiredDate:    tiSelectedDate,
       workers_no:      hasWorkers ? w : null,
+      rateComment:     tiRateComment.trim(),
       ...extraFields,
     };
   };
@@ -570,6 +587,19 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
                   className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-300 transition"
                 />
               </div>
+
+              {/* Free-text explanation of how this rate was set */}
+              <button
+                type="button"
+                onClick={() => setCommentTarget('add')}
+                className={`w-full mb-5 py-2.5 rounded-xl text-xs font-bold border-2 transition ${
+                  rateComment.trim()
+                    ? 'bg-amber-50 border-amber-400 text-amber-700'
+                    : 'bg-white border-slate-200 text-slate-500 hover:border-amber-300'
+                }`}
+              >
+                {rateComment.trim() ? tb.commentSet : tb.comment}
+              </button>
             </div>
 
             {budgetError && (
@@ -733,6 +763,19 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
                     className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300 transition"
                   />
                 </div>
+
+                {/* Free-text explanation of how this rate was set */}
+                <button
+                  type="button"
+                  onClick={() => setCommentTarget('edit')}
+                  className={`w-full mt-3 py-2.5 rounded-xl text-xs font-bold border-2 transition ${
+                    tiRateComment.trim()
+                      ? 'bg-amber-50 border-amber-400 text-amber-700'
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-amber-300'
+                  }`}
+                >
+                  {tiRateComment.trim() ? tb.commentSet : tb.comment}
+                </button>
               </div>
 
               {/* Date section */}
@@ -821,6 +864,16 @@ export default function ManageTradesModal({ site, onClose, onUpdated }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Rate comment editor — shared by the add and edit flows ───────── */}
+      {commentTarget && (
+        <RateCommentModal
+          tradeName={commentTarget === 'edit' ? tiTrade?.name : pendingTrade}
+          value={commentTarget === 'edit' ? tiRateComment : rateComment}
+          onSave={commentTarget === 'edit' ? setTiRateComment : setRateComment}
+          onClose={() => setCommentTarget(null)}
+        />
       )}
     </>
   );

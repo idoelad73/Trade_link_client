@@ -1,0 +1,165 @@
+{
+  "version": "2026-10-18",
+  "effectiveDate": "10/18/2026",
+  "title": "TradeLink Terms of Use",
+  "operator": "Tradelink LLC, New York, New York",
+  "contact": {
+    "entity": "TRADELINK LLC",
+    "address": "182 Bennet Ave 5B, New York, New York 10040",
+    "email": "tradelink@trade-link-client-dev.onrender.com"
+  },
+  "pdf": "/legal/TradeLink-Terms-of-Use.pdf",
+  "source": "TradeLink Terms of Use.pdf",
+  "note": "Clause text transcribed from the signed PDF. The PDF's first page holds drafting to-dos for the author (placeholders to replace, attorney review, Spanish translation) and is deliberately NOT reproduced here — it is not part of the agreement users accept.",
+  "sections": [
+    {
+      "number": "1",
+      "title": "Agreement and what Tradelink is",
+      "clauses": [
+        { "id": "1.1", "heading": "Acceptance", "text": "These Terms of Use (\"Terms\") are a binding agreement between you and Tradelink. By creating an account or using the Tradelink website, apps, and related services (the \"Platform\"), you agree to these Terms and to our Privacy Policy. If you do not agree, do not use the Platform." },
+        { "id": "1.2", "heading": "Using TradeLink for a business", "text": "If you register on behalf of a company, you confirm that you have authority to bind that company, and \"you\" means both you and the company." },
+        { "id": "1.3", "heading": "A marketplace, not a contractor", "text": "TradeLink is an online marketplace that lets Contractors post construction and trade jobs and lets Trade Professionals find and accept that work. TradeLink does not perform construction or trade services, does not employ Trade Professionals, and does not supervise, direct, or control any job." },
+        { "id": "1.4", "heading": "Not a party to your deals", "text": "Any agreement for work is solely between the Contractor and the Trade Professional. TradeLink is not a party to it, is not a general contractor, subcontractor, staffing agency, or broker, and is not responsible for either side's performance." },
+        { "id": "1.5", "heading": "Arbitration notice", "text": "Section 9 contains an agreement to arbitrate disputes individually and a class-action waiver. Please read it carefully." }
+      ]
+    },
+    {
+      "number": "2",
+      "title": "Eligibility and accounts",
+      "clauses": [
+        { "id": "2.1", "heading": "Who can use TradeLink", "text": "You must be at least 18 years old, able to form a binding contract, and legally permitted to work or do business in the United States. The Platform is intended for use in the United States only." },
+        { "id": "2.2", "heading": "Two account types", "text": "Contractors are companies or individuals who post jobs and hire Trade Professionals. Contractors provide a company name, email, phone, office address, and areas of building expertise. Trade Professionals are individuals or companies who offer trade services, such as electricians, plumbers, HVAC technicians, carpenters, roofers, and handymen. Trade Professionals provide personal and professional details, an optional hourly rate, supporting documents, and payout information." },
+        { "id": "2.3", "heading": "Accurate information", "text": "Everything you provide must be true, current, and complete, and you must keep it updated. You may not register under a false identity, impersonate another person or business, or create an account for someone else without their permission." },
+        { "id": "2.4", "heading": "Account security", "text": "You are responsible for your password and for all activity under your account. Tell us immediately if you suspect unauthorized access. One person or business may hold one account per account type unless we agree otherwise in writing." },
+        { "id": "2.5", "heading": "Our right to refuse", "text": "We may decline, suspend, or close any registration at our discretion, including where we cannot verify information you gave us." }
+      ]
+    },
+    {
+      "number": "3",
+      "title": "Credentials, licenses, and verification",
+      "clauses": [
+        { "id": "3.1", "heading": "What Trade Professionals must hold", "text": "If you are a Trade Professional, you confirm that you hold, and will keep current, every license, registration, permit, certification, bond, and insurance policy that the law requires for the work you offer in each place you offer it. You may only accept jobs you are legally qualified to perform." },
+        { "id": "3.2", "heading": "Documents you upload", "text": "Trade licenses, insurance certificates, and CVs or resumes you upload must be genuine, unaltered, current, and your own. You must replace any document that expires or changes and tell us promptly if a license is suspended, revoked, or restricted, or if your insurance lapses." },
+        { "id": "3.3", "heading": "What \"verified\" means", "text": "Where a profile is shown as \"verified\", it means only that TradeLink reviewed documents the user submitted at a point in time. It is not a guarantee, endorsement, or certification of any user's identity, skill, quality of work, licensing status, insurance coverage, or fitness for a particular job." },
+        { "id": "3.4", "heading": "Do your own checks", "text": "Contractors are responsible for confirming that a Trade Professional's license, insurance, and experience are valid and suitable before hiring. Trade Professionals are responsible for assessing a Contractor, the job site, and the scope of work before accepting." },
+        { "id": "3.5", "heading": "Background checks", "text": "TradeLink does not run criminal background checks on users unless we expressly say so on the Platform." }
+      ]
+    },
+    {
+      "number": "4",
+      "title": "Jobs and the relationship between users",
+      "clauses": [
+        { "id": "4.1", "heading": "Posting jobs", "text": "Contractors must describe each job accurately, including location, scope, timing, pay, and any known site hazards. Contractors may only post real jobs they are authorized to offer and intend to fill." },
+        { "id": "4.2", "heading": "Accepting jobs", "text": "When a Contractor and a Trade Professional agree on a job through the Platform, they form a direct contract with each other. Both sides should put scope, price, schedule, materials, change orders, and warranty terms in writing." },
+        { "id": "4.3", "heading": "Independent businesses", "text": "Trade Professionals are independent businesses, not employees, agents, or partners of TradeLink. TradeLink does not set their hours, supply their tools, or direct how they work. Nothing on the Platform creates an employment, agency, or joint-venture relationship between TradeLink and any user." },
+        { "id": "4.4", "heading": "Classification between users", "text": "Contractors and Trade Professionals are solely responsible for deciding how their own relationship is classified under employment, tax, and workers' compensation law, and for meeting the obligations that follow." },
+        { "id": "4.5", "heading": "Legal compliance on the job", "text": "Users are responsible for permits, inspections, building codes, workplace safety rules including OSHA requirements, prevailing-wage rules, lien law, and all other laws that apply to the work." },
+        { "id": "4.6", "heading": "Site safety and risk", "text": "Construction and trade work is inherently hazardous. Users deal with each other and enter job sites at their own risk. TradeLink does not inspect job sites or work product." },
+        { "id": "4.7", "heading": "Disputes between users", "text": "Disputes about work quality, delays, damage, injuries, or payment are between the users involved. TradeLink may, but is not required to, help the parties communicate." },
+        { "id": "4.8", "heading": "Keeping it on the Platform", "text": "For 12 months after you first connect with another user through TradeLink, you agree not to arrange or pay for work with that user outside the Platform in order to avoid TradeLink's fees." }
+      ]
+    },
+    {
+      "number": "5",
+      "title": "Payments, payouts, and fees",
+      "clauses": [
+        { "id": "5.1", "heading": "Payment processor", "text": "Payments on the Platform are processed by Stripe, Inc. and its affiliates (\"Stripe\"). TradeLink is not a bank, money transmitter, or escrow agent and does not itself hold user funds." },
+        { "id": "5.2", "heading": "Stripe terms for Trade Professionals", "text": "To receive payouts, a Trade Professional must connect a bank account and accept the Stripe Connected Account Agreement, which includes the Stripe Services Agreement. By connecting a bank account, you authorize TradeLink to create and manage a Stripe payout account on your behalf and to share your information with Stripe for that purpose." },
+        { "id": "5.3", "heading": "Identity information", "text": "Stripe requires identity details such as your legal name, date of birth, the last 4 digits of your Social Security number, and bank routing and account numbers. Bank numbers are sent directly to Stripe in tokenized form and are not stored on TradeLink's servers. Stripe may ask for more information, and payouts may be delayed or withheld until you provide it." },
+        { "id": "5.4", "heading": "Paying for jobs", "text": "Contractors agree to pay the amounts agreed for each job, plus any applicable fees and taxes, using a payment method they are authorized to use. Contractors authorize TradeLink and Stripe to charge that method for those amounts at booking." },
+        { "id": "5.5", "heading": "TradeLink fees", "text": "TradeLink charges a service fee of 6.7% of each job payment, deducted from the Trade Professional's payout, and a fee of 3.5% added to the Contractor's total. Fees are shown before you confirm a transaction and are non-refundable except as stated in these Terms or required by law. We may change fees with at least 30 days' notice." },
+        { "id": "5.6", "heading": "Payout timing", "text": "Payouts are sent to the connected bank account after the Contractor confirms completion. Timing depends on Stripe and your bank, and TradeLink does not guarantee when funds will arrive." },
+        { "id": "5.7", "heading": "Holds, refunds, and chargebacks", "text": "We may delay, hold, reverse, or offset a payout where we reasonably suspect fraud, a breach of these Terms, or a payment dispute, or where the law or Stripe requires it. If a payment is refunded or charged back, the Trade Professional who received it is responsible for repaying that amount." },
+        { "id": "5.8", "heading": "Hourly rates", "text": "A rate shown on a profile is an estimate set by the Trade Professional. The final price is whatever the two users agree." },
+        { "id": "5.9", "heading": "Taxes", "text": "Each user is responsible for determining, collecting, reporting, and paying their own taxes. TradeLink or Stripe may collect tax information and issue tax forms such as IRS Form 1099-K where required." }
+      ]
+    },
+    {
+      "number": "6",
+      "title": "Your content, reviews, location, and conduct",
+      "clauses": [
+        { "id": "6.1", "heading": "Your content", "text": "\"User Content\" means anything you submit, including profile details, photos, job posts, messages, documents, and reviews. You keep ownership of it. You grant TradeLink a worldwide, non-exclusive, royalty-free license to host, store, reproduce, display, translate, and distribute your User Content in order to operate, improve, and promote the Platform. This license ends when the content is deleted, except for copies we must keep for legal, safety, or backup reasons and reviews that stay attached to other users' profiles." },
+        { "id": "6.2", "heading": "Your responsibility for content", "text": "You confirm that you have the rights to everything you post and that it is accurate, lawful, and does not infringe anyone's rights. Profile photos must show you or your business." },
+        { "id": "6.3", "heading": "Reviews", "text": "Reviews must reflect a real job arranged through TradeLink and your honest experience. You may not review yourself, trade or pay for reviews, post reviews of competitors, or threaten a bad review to gain an advantage. TradeLink does not write or verify reviews and may remove any review that breaks these Terms. Ratings are opinions of users, not of TradeLink." },
+        { "id": "6.4", "heading": "Location sharing", "text": "Trade Professionals may choose to share their location so that nearby Contractors can find them. Location sharing is optional and can be turned off in settings at any time. Location shown on the Platform may be approximate or out of date." },
+        {
+          "id": "6.5",
+          "heading": "Prohibited conduct",
+          "text": "You agree not to:",
+          "list": [
+            "post false, misleading, or fraudulent information, including fake jobs, forged licenses, or altered insurance certificates;",
+            "offer or request work that is illegal or that you are not licensed to perform;",
+            "harass, threaten, discriminate against, or endanger any person;",
+            "use another user's contact or personal information for anything other than the job it was shared for;",
+            "send spam or unsolicited marketing through the Platform;",
+            "scrape, crawl, copy, or harvest data from the Platform by automated means;",
+            "reverse engineer, disrupt, overload, or probe the security of the Platform, or upload malware;",
+            "use the Platform for money laundering, payment fraud, or to process payments unrelated to a real job;",
+            "create multiple or fake accounts, or return after a suspension without our permission;",
+            "violate any law, including contractor-licensing, labor, anti-discrimination, and consumer-protection laws."
+          ]
+        },
+        { "id": "6.6", "heading": "Moderation", "text": "We may review, remove, or restrict any User Content or account activity that we believe breaks these Terms or the law, but we have no obligation to monitor the Platform." }
+      ]
+    },
+    {
+      "number": "7",
+      "title": "Our rights, your privacy, and ending the relationship",
+      "clauses": [
+        { "id": "7.1", "heading": "TradeLink's property", "text": "The Platform, including its software, design, text, logos, and the TradeLink name, belongs to TradeLink or its licensors and is protected by intellectual property law. We grant you a limited, revocable, non-transferable license to use the Platform for its intended purpose. All other rights are reserved." },
+        { "id": "7.2", "heading": "Feedback", "text": "If you send us suggestions, we may use them freely without payment or obligation to you." },
+        { "id": "7.3", "heading": "Copyright complaints", "text": "If you believe content on the Platform infringes your copyright, send a notice with the details required by the Digital Millennium Copyright Act to tradelink@trade-link-client-dev.onrender.com. We may remove the content and close the accounts of repeat infringers." },
+        { "id": "7.4", "heading": "Privacy", "text": "Our Privacy Policy explains what personal information we collect, how we use it, and who we share it with, including Stripe and other users you connect with. By using the Platform you acknowledge that Policy." },
+        { "id": "7.5", "heading": "Communications", "text": "You agree to receive account, transaction, and service messages from us by email, SMS, and in-app notification at the contact details you provide. Message and data rates may apply. You can opt out of marketing messages at any time." },
+        { "id": "7.6", "heading": "Closing your account", "text": "You may close your account at any time in settings or by emailing tradelink@trade-link-client-dev.onrender.com. Jobs already agreed and amounts already owed remain your responsibility." },
+        { "id": "7.7", "heading": "Suspension and termination by us", "text": "We may suspend or terminate your account, remove your content, or withhold access at any time, with or without notice, if we believe you have breached these Terms, created risk or legal exposure for TradeLink or other users, or provided information we cannot verify. Where practical, we will tell you why." },
+        { "id": "7.8", "heading": "What survives", "text": "Sections 4.3 to 4.7, 5.7, 5.9, 6.1, 7.1, 8, 9, and 10 continue to apply after your account ends." },
+        { "id": "7.9", "heading": "Changes to the Platform", "text": "We may add, change, or remove features, or discontinue the Platform, at any time. Pre-release or beta features are provided for testing and may be changed or withdrawn without notice." }
+      ]
+    },
+    {
+      "number": "8",
+      "title": "Disclaimers, liability, and indemnity",
+      "clauses": [
+        { "id": "8.1", "heading": "Provided \"as is\"", "text": "To the fullest extent the law allows, the Platform is provided \"as is\" and \"as available\", without warranties of any kind, whether express, implied, or statutory, including implied warranties of merchantability, fitness for a particular purpose, title, and non-infringement. We do not promise that the Platform will be uninterrupted, secure, or error-free." },
+        { "id": "8.2", "heading": "No warranty about users or work", "text": "TradeLink makes no warranty about any user's identity, licensing, insurance, qualifications, reliability, or solvency, about the quality, safety, legality, or timing of any work, or about the accuracy of any job post, profile, or review. TradeLink does not guarantee that Contractors will find workers or that Trade Professionals will find jobs." },
+        { "id": "8.3", "heading": "Release", "text": "To the fullest extent the law allows, you release TradeLink and its owners, officers, employees, and agents from claims and damages arising out of disputes with other users, or out of work performed or not performed, including property damage, personal injury, and death." },
+        { "id": "8.4", "heading": "Limitation of liability", "text": "To the fullest extent the law allows, TradeLink will not be liable for any indirect, incidental, special, consequential, exemplary, or punitive damages, or for lost profits, revenue, data, or goodwill, however caused. TradeLink's total liability for all claims relating to the Platform will not exceed the greater of (a) the fees you paid to TradeLink in the 12 months before the claim arose and (b) $100." },
+        { "id": "8.5", "heading": "Where limits do not apply", "text": "Some states do not allow certain warranty exclusions or liability limits, so parts of this Section may not apply to you. Nothing in these Terms limits liability that cannot be limited by law." },
+        { "id": "8.6", "heading": "Indemnity", "text": "You agree to defend, indemnify, and hold harmless TradeLink and its owners, officers, employees, and agents from any claims, losses, liabilities, and expenses, including reasonable attorneys' fees, arising from: (a) your use of the Platform; (b) work you perform, request, or pay for; (c) your User Content; (d) your breach of these Terms or of any law; (e) any dispute between you and another user or a third party; or (f) any claim that you were misclassified as an employee or independent contractor." }
+      ]
+    },
+    {
+      "number": "9",
+      "title": "Disputes with TradeLink",
+      "clauses": [
+        { "id": "9.1", "heading": "Talk to us first", "text": "Before starting any formal proceeding, you agree to send a written description of the dispute to tradelink@trade-link-client-dev.onrender.com and to give us 30 days to try to resolve it informally." },
+        { "id": "9.2", "heading": "Governing law", "text": "These Terms are governed by the laws of the State of New York, without regard to its conflict-of-laws rules." },
+        { "id": "9.3", "heading": "Binding arbitration", "text": "Any dispute between you and TradeLink that is not resolved informally will be decided by binding individual arbitration administered by the American Arbitration Association under its Consumer or Commercial Arbitration Rules, not in court, except that either side may bring an individual claim in small-claims court or seek an injunction to protect intellectual property. The arbitration will take place in New York, New York or remotely." },
+        { "id": "9.4", "heading": "Class-action and jury waiver", "text": "You and TradeLink each waive the right to a jury trial and the right to take part in a class, collective, or representative action." },
+        { "id": "9.5", "heading": "Opting out", "text": "You may opt out of arbitration by emailing tradelink@trade-link-client-dev.onrender.com within 45 days of first accepting these Terms. If you opt out, or if arbitration does not apply, disputes will be heard only in the state or federal courts located in New York." },
+        { "id": "9.6", "heading": "Time limit", "text": "To the extent the law allows, any claim must be filed within one year after it arises." }
+      ]
+    },
+    {
+      "number": "10",
+      "title": "General terms",
+      "clauses": [
+        { "id": "10.1", "heading": "Changes to these Terms", "text": "We may update these Terms from time to time. If a change is material, we will notify you by email or in the Platform at least 10 days before it takes effect. Continuing to use the Platform after that date means you accept the updated Terms." },
+        { "id": "10.2", "heading": "Entire agreement", "text": "These Terms, the Privacy Policy, and any fee terms shown on the Platform are the whole agreement between you and TradeLink about the Platform." },
+        { "id": "10.3", "heading": "Severability and waiver", "text": "If any part of these Terms is found unenforceable, the rest stays in effect. Our not enforcing a provision is not a waiver of it." },
+        { "id": "10.4", "heading": "Assignment", "text": "You may not transfer your rights under these Terms without our written consent. We may transfer ours in connection with a merger, sale, or reorganization." },
+        { "id": "10.5", "heading": "Languages", "text": "These Terms may be provided in English and Spanish. If the two versions conflict, the English version controls to the extent the law allows." },
+        { "id": "10.6", "heading": "Third-party services", "text": "The Platform relies on third-party services such as Stripe and mapping providers. Your use of those services is subject to their own terms, and TradeLink is not responsible for them." },
+        { "id": "10.7", "heading": "Force majeure", "text": "We are not liable for delays or failures caused by events beyond our reasonable control." }
+      ]
+    },
+    {
+      "number": "11",
+      "title": "Contact",
+      "clauses": [
+        { "id": "11.1", "heading": "Questions", "text": "Questions about these Terms can be sent to TRADELINK LLC, 182 Bennet Ave 5B, New York, New York 10040, or by email to tradelink@trade-link-client-dev.onrender.com." }
+      ]
+    }
+  ]
+}

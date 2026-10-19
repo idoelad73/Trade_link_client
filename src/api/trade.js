@@ -7,7 +7,14 @@ export const updateLocation  = (lat, lng)   => api.patch('/trade/location', { la
 export const getMessages     = ()           => api.get('/trade/messages').then(r => r.data.messages);
 export const getScheduleBookings = ()       => api.get('/trade/schedule-bookings').then(r => r.data.bookings);
 export const approveMessage  = (id, workersOffered) => api.patch(`/trade/messages/${id}/approve`, { workersOffered }).then(r => r.data);
-export const findJobs        = (distance, unit) => api.get(`/trade/find-jobs?distance=${distance}&unit=${unit}`).then(r => r.data);
+// minGrade: minimum contractor rating (1–5). Omitted when 0 / null = any rating.
+// siteType: 'residential' | 'commercial'. Omitted when null = any project type.
+export const findJobs        = (distance, unit, minGrade = null, siteType = null) => {
+  const params = new URLSearchParams({ distance, unit });
+  if (minGrade) params.set('minGrade', minGrade);
+  if (siteType) params.set('siteType', siteType);
+  return api.get(`/trade/find-jobs?${params.toString()}`).then(r => r.data);
+};
 export const applyToJob       = (siteId, lang, date, workers_no = 1) => api.post(`/trade/jobs/${siteId}/apply`, { lang, date, workers_no }).then(r => r.data);
 export const requestReschedule = (siteId, newDate)   => api.post('/trade/reschedule', { siteId, newDate }).then(r => r.data);
 export const removeBooking     = (siteId)            => api.delete('/trade/bookings', { data: { siteId } }).then(r => r.data);

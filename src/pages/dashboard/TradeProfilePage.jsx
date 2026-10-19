@@ -29,19 +29,6 @@ function Stars({ avg, size = 16 }) {
   );
 }
 
-function InfoRow({ icon, label, value }) {
-  if (!value) return null;
-  return (
-    <div className="flex items-start gap-3 py-3 border-b border-slate-100 last:border-0">
-      <span className="text-lg flex-shrink-0 mt-0.5">{icon}</span>
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-0.5">{label}</p>
-        <p className="text-sm text-slate-800 font-medium break-words">{value}</p>
-      </div>
-    </div>
-  );
-}
-
 export default function TradeProfilePage() {
   const { tradeId } = useParams();
   const navigate    = useNavigate();
@@ -141,32 +128,6 @@ export default function TradeProfilePage() {
                   💰 ${pro.hourlyRate}<span className="font-normal text-emerald-500">/hr</span>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* ── Contact & details ─────────────────────────────────────── */}
-          <div className="bg-white rounded-3xl shadow-sm border border-slate-100 px-6 py-2">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide pt-4 pb-2">Contact & Details</h2>
-            <InfoRow icon="📞" label="Phone"        value={pro.phone} />
-            <InfoRow icon="✉️" label="Email"        value={pro.email} />
-            <InfoRow icon="📍" label="Address"      value={pro.address} />
-            <InfoRow icon="📅" label="Member Since" value={pro.createdAt ? new Date(pro.createdAt).toLocaleDateString(undefined, { year:'numeric', month:'long', day:'numeric' }) : null} />
-
-            {/* Documents */}
-            <div className="py-3">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Documents</p>
-              <div className="flex flex-wrap gap-2">
-                {[['📄 License', pro.licenseDoc], ['🛡️ Insurance', pro.insuranceDoc], ['📋 CV', pro.cv]].map(([label, url]) => (
-                  url
-                    ? <a key={label} href={url} target="_blank" rel="noreferrer"
-                        className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition">
-                        ✓ {label}
-                      </a>
-                    : <span key={label} className="text-xs font-medium px-3 py-1.5 rounded-xl bg-slate-50 text-slate-400 border border-slate-100">
-                        — {label}
-                      </span>
-                ))}
-              </div>
             </div>
           </div>
 

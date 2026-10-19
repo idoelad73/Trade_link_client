@@ -6,6 +6,7 @@ import useUIStore from '../../stores/uiStore';
 import useAuthStore from '../../stores/authStore';
 import { registerTrade } from '../../api/auth.js';
 import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
+import TermsCheckbox, { termsError, TERMS_VERSION } from '../../components/shared/TermsCheckbox.jsx';
 import api from '../../api/axios.js';
 
 const emailSchema = z.object({
@@ -381,6 +382,7 @@ export default function TradeRegister() {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [error, setError]         = useState('');
   const [locationError, setLocationError] = useState('');
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [emailTaken, setEmailTaken] = useState(false);
   const [loading, setLoading]     = useState(false);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -476,9 +478,16 @@ export default function TradeRegister() {
       }
     }
 
+    // Guarded here as well as via the disabled button — the button alone would
+    // still let an Enter keypress inside a field submit the form.
+    if (!acceptedTerms) {
+      return setError(termsError(lang));
+    }
+
     setLoading(true);
     try {
       const fd = new FormData();
+      fd.append('termsVersion', TERMS_VERSION);
       Object.entries(form).forEach(([k, v]) => {
         if (v !== null && v !== undefined && k !== 'confirmPassword' && k !== 'confirmEmail') fd.append(k, v);
       });
@@ -1014,11 +1023,16 @@ export default function TradeRegister() {
             </div>
           )}
 
+          {/* Terms of Use acceptance */}
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+            <TermsCheckbox checked={acceptedTerms} onChange={setAcceptedTerms} accent="sky" />
+          </div>
+
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-sky-500 to-amber-400 hover:from-sky-400 hover:to-amber-300 disabled:opacity-60 text-white font-semibold text-base py-4 rounded-2xl shadow-lg shadow-sky-200 transition-all duration-200 active:scale-[0.99] mt-2"
+            disabled={loading || !acceptedTerms}
+            className="w-full bg-gradient-to-r from-sky-500 to-amber-400 hover:from-sky-400 hover:to-amber-300 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-base py-4 rounded-2xl shadow-lg shadow-sky-200 transition-all duration-200 active:scale-[0.99] mt-2"
           >
             {loading ? t.submitting : t.submit}
           </button>
