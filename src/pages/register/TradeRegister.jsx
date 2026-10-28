@@ -586,6 +586,15 @@ export default function TradeRegister() {
       )}
 
       <div className="max-w-2xl mx-auto px-6 py-12">
+        {/* Back to the area preview page this form was opened from */}
+        <button
+          type="button"
+          onClick={() => navigate('/register/trade-area')}
+          className="text-sm font-semibold text-sky-600 hover:text-sky-500 transition mb-6"
+        >
+          {lang === 'es' ? '← Volver' : '← Back'}
+        </button>
+
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 bg-sky-100 text-sky-700 text-xs font-semibold px-4 py-1.5 rounded-full mb-4 border border-sky-200">

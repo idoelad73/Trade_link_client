@@ -298,6 +298,15 @@ export default function ContractorRegister() {
       <Navbar showLogin />
 
       <div className="max-w-2xl mx-auto px-6 py-12">
+        {/* Back to the area preview page this form was opened from */}
+        <button
+          type="button"
+          onClick={() => navigate('/register/contractor-area')}
+          className="text-sm font-semibold text-amber-600 hover:text-amber-500 transition mb-6"
+        >
+          {lang === 'es' ? '← Volver' : '← Back'}
+        </button>
+
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 bg-amber-100 text-amber-700 text-xs font-semibold px-4 py-1.5 rounded-full mb-4 border border-amber-200">

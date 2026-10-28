@@ -1,69 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { applyToJob } from '../../api/trade.js';
 import useUIStore from '../../stores/uiStore.js';
 import RateCommentModal from '../../components/shared/RateCommentModal.jsx';
-import { toast } from '../../utils/toast.js';
-
-// ── Working-day helpers (duplicated from TradeSchedule) ──────────────────────
-const _hCache = {};
-function _nthWeekday(y, m, wd, n) {
-  let c = 0;
-  for (let d = 1; d <= 31; d++) {
-    const dt = new Date(y, m, d);
-    if (dt.getMonth() !== m) break;
-    if (dt.getDay() === wd && ++c === n)
-      return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-  }
-  return null;
-}
-function _lastWeekday(y, m, wd) {
-  for (let d = new Date(y, m + 1, 0).getDate(); d >= 1; d--)
-    if (new Date(y, m, d).getDay() === wd)
-      return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-  return null;
-}
-function getUSHolidays(y) {
-  if (_hCache[y]) return _hCache[y];
-  const h = new Set();
-  [[0,1],[5,19],[6,4],[10,11],[11,25]].forEach(([mo, da]) => {
-    const dt = new Date(y, mo, da);
-    const dow = dt.getDay();
-    if (dow === 6) dt.setDate(da - 1);
-    else if (dow === 0) dt.setDate(da + 1);
-    h.add(`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`);
-  });
-  [
-    _nthWeekday(y, 0, 1, 3), _nthWeekday(y, 1, 1, 3), _lastWeekday(y, 4, 1),
-    _nthWeekday(y, 8, 1, 1), _nthWeekday(y, 9, 1, 2), _nthWeekday(y, 10, 4, 4),
-  ].filter(Boolean).forEach(d => h.add(d));
-  return (_hCache[y] = h);
-}
-function isWorkingDay(dateStr) {
-  const dt = new Date(dateStr + 'T12:00:00');
-  const dow = dt.getDay();
-  return dow !== 0 && dow !== 6 && !getUSHolidays(dt.getFullYear()).has(dateStr);
-}
-function nextWorkingDay(dateStr) {
-  const dt = new Date(dateStr + 'T12:00:00');
-  let key = dateStr;
-  while (!isWorkingDay(key)) {
-    dt.setDate(dt.getDate() + 1);
-    key = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-  }
-  return key;
-}
-function getWorkingDaysRange(startDateStr, totalHours) {
-  const need = Math.ceil(totalHours / 8);
-  const dt = new Date(startDateStr + 'T12:00:00');
-  const days = [];
-  while (days.length < need) {
-    const key = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-    if (isWorkingDay(key)) days.push(key);
-    dt.setDate(dt.getDate() + 1);
-  }
-  return days;
-}
+import { getJobDateInfo, appliedJobIds } from '../../utils/jobDates.js';
 
 const content = {
   en: {
@@ -113,68 +52,13 @@ export default function JobResultsPage() {
   const hourlyRate = state?.hourlyRate ?? null;
   const unit       = state?.unit       ?? 'mi';
 
-  const [applyingId,   setApplyingId]   = useState(null);
-  const [appliedIds,   setAppliedIds]   = useState(new Set());
-
-  // ── Workers modal state ───────────────────────────────────────────────────
-  const [pendingJob,   setPendingJob]   = useState(null);   // job waiting for workers input
-  const [workersCount, setWorkersCount] = useState('1');
-  const [workersError, setWorkersError] = useState('');
-
   // Read-only rate explanation written by the contractor — { tradeName, text }
   const [rateCommentView, setRateCommentView] = useState(null);
 
-  // Step 1 — called when button is clicked
-  const handleApply = useCallback((job) => {
-    if (applyingId) return;
-    const te = job.tradeEntry;
-    if (!te?.requiredDate) return;
-    if ((te.workers_no ?? 0) > 0) {
-      // Show workers modal first
-      setWorkersCount('1');
-      setWorkersError('');
-      setPendingJob(job);
-    } else {
-      handleApplyConfirm(job, 1);
-    }
-  }, [applyingId]);  // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Step 2 — actual API call (after workers confirmed, or direct for no-workers jobs)
-  const handleApplyConfirm = useCallback(async (job, workersNo) => {
-    const te = job.tradeEntry;
-    const baseDate = te?.requiredDate;
-    if (!baseDate) return;
-    const actualStart = (te?.budgetType === 'hours' && te?.totalHours)
-      ? getWorkingDaysRange(baseDate, te.totalHours)[0]
-      : nextWorkingDay(baseDate);
-    setPendingJob(null);
-    setApplyingId(job._id);
-    try {
-      await applyToJob(job._id, lang, actualStart, workersNo);
-      setAppliedIds((prev) => { const n = new Set(prev); n.add(String(job._id)); return n; });
-      toast.success(t.applySuccess(job.name, actualStart), { duration: 5000 });
-    } catch (err) {
-      const data = err?.response?.data;
-      if (err?.response?.status === 409) {
-        if (data?.assigned)   toast.error(t.applyAssigned(job.name), { duration: 4000 });
-        else if (data?.slotsFull) toast.error('All worker slots for this job are full.', { duration: 4000 });
-        else if (data?.tooMany)   toast.error(`Only ${data.workersLeft} slot(s) remaining.`, { duration: 4000 });
-        else                  toast.warning(t.applyDupe(job.name), { duration: 4000 });
-      } else {
-        toast.error(t.applyError, { duration: 4000 });
-      }
-    } finally {
-      setApplyingId(null);
-    }
-  }, [applyingId, lang, t]);  // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleWorkersConfirm = () => {
-    const w = parseInt(workersCount);
-    const maxSlots = pendingJob?.tradeEntry?.workers_no ?? 0;
-    if (isNaN(w) || w < 1) { setWorkersError('Minimum 1 worker required.'); return; }
-    if (maxSlots > 0 && w > maxSlots) { setWorkersError(`Only ${maxSlots} slot(s) available.`); return; }
-    handleApplyConfirm(pendingJob, w);
-  };
+  // Apply opens the full project details page; the apply flow runs from there
+  const openJob = (job) => navigate(`/dashboard/trade/jobs/${job._id}`, {
+    state: { job, trade: jobTrade, hourlyRate, unit },
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-slate-50 to-amber-50 font-sans text-slate-800">
@@ -214,19 +98,9 @@ export default function JobResultsPage() {
               const distKm  = (job.distanceMeters / 1000).toFixed(1);
               const distLabel = unit === 'km' ? `${distKm} km` : `${distMi} mi`;
               const te = job.tradeEntry;
-              const alreadyApplied = appliedIds.has(String(job._id));
+              const alreadyApplied = appliedJobIds.has(String(job._id));
 
-              const getDateInfo = () => {
-                if (!te?.requiredDate) return null;
-                const baseDate  = te.requiredDate;
-                const isHours   = te?.budgetType === 'hours' && te?.totalHours;
-                const range     = isHours ? getWorkingDaysRange(baseDate, te.totalHours) : null;
-                const start     = range ? range[0] : nextWorkingDay(baseDate);
-                const end       = range ? range[range.length - 1] : null;
-                const shifted   = start !== baseDate;
-                return { start, end, range, isHours, shifted };
-              };
-              const dateInfo = getDateInfo();
+              const dateInfo = getJobDateInfo(te);
 
               return (
                 <div
@@ -244,7 +118,6 @@ export default function JobResultsPage() {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="font-extrabold text-slate-800 text-base truncate">{job.name}</p>
-                      <p className="text-xs text-slate-400 truncate mt-0.5">📍 {job.address}</p>
                     </div>
                     <span className="flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-50 text-sky-600 border border-sky-100">
                       📏 {distLabel}
@@ -306,19 +179,20 @@ export default function JobResultsPage() {
                         ✅ Deposit held{te.depositAmount != null ? ` $${te.depositAmount}` : ''}
                       </span>
                     )}
-                    {/* Contractor's explanation of the rate — icon only, to keep
-                        the badge row compact. Hidden when nothing was written. */}
-                    {te?.rateComment?.trim() && (
-                      <button
-                        type="button"
-                        onClick={() => setRateCommentView({ tradeName: te.name ?? jobTrade, text: te.rateComment })}
-                        title={t.rateComment}
-                        className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition active:scale-95"
-                      >
-                        💬
-                      </button>
-                    )}
                   </div>
+
+                  {/* Contractor's explanation of the rate — shown on the card;
+                      tap to read it in full. Hidden when nothing was written. */}
+                  {te?.rateComment?.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setRateCommentView({ tradeName: te.name ?? jobTrade, text: te.rateComment })}
+                      className="mx-4 mb-3 w-[calc(100%-2rem)] text-left bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-xl px-3 py-2 transition"
+                    >
+                      <p className="text-[10px] font-semibold text-amber-500 uppercase tracking-wide mb-0.5">💬 {t.rateComment}</p>
+                      <p className="text-xs text-amber-800 line-clamp-2 whitespace-pre-wrap break-words">{te.rateComment}</p>
+                    </button>
+                  )}
 
                   {/* Date info + Apply */}
                   <div className="px-4 pb-4 space-y-1.5">
@@ -340,20 +214,11 @@ export default function JobResultsPage() {
                     )}
 
                     <button
-                      onClick={() => handleApply(job)}
-                      disabled={!!applyingId || !dateInfo || alreadyApplied}
+                      onClick={() => openJob(job)}
+                      disabled={alreadyApplied}
                       className="w-full py-3 rounded-xl text-sm font-bold transition-all active:scale-[0.99] bg-gradient-to-r from-amber-500 to-sky-500 hover:from-amber-400 hover:to-sky-400 text-white shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {alreadyApplied ? (
-                        t.applied
-                      ) : applyingId === job._id ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                          {t.applying}
-                        </span>
-                      ) : (
-                        t.apply
-                      )}
+                      {alreadyApplied ? t.applied : t.apply}
                     </button>
                   </div>
                 </div>
@@ -362,77 +227,6 @@ export default function JobResultsPage() {
           </>
         )}
       </main>
-
-      {/* ── Workers count modal ───────────────────────────────────────── */}
-      {pendingJob && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="w-full max-w-xs bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-100">
-
-            <div className="h-1 w-full bg-gradient-to-r from-amber-400 to-sky-400" />
-
-            <div className="px-6 pt-6 pb-2 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-2xl mx-auto mb-3">👷</div>
-              <h3 className="text-base font-extrabold text-slate-800 mb-1">How many workers?</h3>
-              <p className="text-xs text-slate-400 mb-3">
-                Tell the contractor how many workers you'll bring to <span className="font-semibold text-slate-600">{pendingJob.name}</span>
-              </p>
-
-              {/* Slots badge */}
-              {(pendingJob.tradeEntry?.workers_no ?? 0) > 0 && (
-                <div className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700">
-                  👷 {pendingJob.tradeEntry.workers_no} slot{pendingJob.tradeEntry.workers_no !== 1 ? 's' : ''} available
-                </div>
-              )}
-
-              {/* +/- input */}
-              <div className="flex items-center gap-3 mb-2">
-                <button
-                  type="button"
-                  onClick={() => setWorkersCount(w => String(Math.max(1, (parseInt(w) || 1) - 1)))}
-                  className="w-11 h-11 flex-shrink-0 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-lg transition active:scale-95"
-                >−</button>
-                <input
-                  type="number"
-                  min="1"
-                  max={pendingJob.tradeEntry?.workers_no > 0 ? pendingJob.tradeEntry.workers_no : undefined}
-                  value={workersCount}
-                  onChange={(e) => { setWorkersCount(e.target.value); setWorkersError(''); }}
-                  className="flex-1 text-center text-xl font-extrabold text-slate-800 border-2 border-slate-200 focus:border-sky-400 rounded-xl py-2 outline-none transition"
-                />
-                <button
-                  type="button"
-                  onClick={() => setWorkersCount(w => {
-                    const next = (parseInt(w) || 1) + 1;
-                    const max  = pendingJob.tradeEntry?.workers_no ?? 0;
-                    if (max > 0 && next > max) return w;
-                    return String(next);
-                  })}
-                  className="w-11 h-11 flex-shrink-0 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-lg transition active:scale-95"
-                >+</button>
-              </div>
-
-              {workersError && (
-                <p className="text-xs text-red-500 font-semibold mb-2">{workersError}</p>
-              )}
-            </div>
-
-            <div className="px-6 pb-6 flex gap-2 mt-3">
-              <button
-                onClick={handleWorkersConfirm}
-                className="flex-1 font-bold py-2.5 rounded-xl text-sm shadow transition-all active:scale-[0.98] bg-gradient-to-r from-amber-500 to-sky-500 hover:from-amber-400 hover:to-sky-400 text-white shadow-amber-200"
-              >
-                Apply for Job →
-              </button>
-              <button
-                onClick={() => setPendingJob(null)}
-                className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Read-only rate explanation, opened from a job card's 💬 */}
       {rateCommentView && (

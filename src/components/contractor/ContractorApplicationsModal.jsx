@@ -41,7 +41,8 @@ const content = {
   },
 };
 
-export default function ContractorApplicationsModal({ onClose, onApproved }) {
+// asPage: render as a full page (see pages/dashboard/*Page.jsx) instead of an overlay
+export default function ContractorApplicationsModal({ onClose, onApproved, asPage = false }) {
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang];
 
@@ -66,10 +67,11 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
   }, []);
 
   useEffect(() => {
+    if (asPage) return;
     const h = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
-  }, [onClose]);
+  }, [onClose, asPage]);
 
   const handleApprove = async (app) => {
     if (approving) return;
@@ -106,10 +108,12 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
   return (
     <>
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      className={asPage ? 'w-full' : 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm'}
+      onClick={asPage ? undefined : (e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[95dvh] sm:max-h-[90vh] flex flex-col mx-2 sm:mx-0">
+      <div className={asPage
+        ? 'relative w-full bg-white/90 backdrop-blur-sm rounded-3xl shadow-md border border-slate-100 overflow-hidden flex flex-col'
+        : 'relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[95dvh] sm:max-h-[90vh] flex flex-col mx-2 sm:mx-0'}>
 
         <div className="h-1.5 w-full bg-gradient-to-r from-amber-400 to-sky-400 flex-shrink-0" />
 
@@ -121,14 +125,16 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
             </div>
             <h2 className="text-xl font-extrabold text-slate-800">{t.title}</h2>
           </div>
+          {!asPage && (
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-700 transition text-lg"
           >×</button>
+          )}
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto px-4 sm:px-8 py-4 sm:py-6 flex-1">
+        <div className={`${asPage ? '' : 'overflow-y-auto '}px-4 sm:px-8 py-4 sm:py-6 flex-1`}>
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <div className="w-8 h-8 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin" />
@@ -497,6 +503,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
           )}
         </div>
 
+        {!asPage && (
         <div className="px-4 sm:px-8 py-4 sm:py-5 border-t border-slate-100 flex-shrink-0">
           <button
             onClick={onClose}
@@ -505,6 +512,7 @@ export default function ContractorApplicationsModal({ onClose, onApproved }) {
             {t.close}
           </button>
         </div>
+        )}
       </div>
     </div>
 

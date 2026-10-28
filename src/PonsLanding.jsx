@@ -8,12 +8,7 @@ const content = {
     subtitle:
       "TradeLink helps you connect, collaborate, and deliver — all in one clean, powerful workspace.",
     cta: "Let's start work",
-    feature1Title: "Find the Right Pro",
-    feature1Desc: "Post your project and instantly connect with verified tradespeople — electricians, plumbers, builders, and more — ready to get the job done.",
-    feature2Title: "Trades, Meet Your Next Job",
-    feature2Desc: "Browse local projects looking for your skills. Get hired faster by sites and homeowners who need exactly what you offer.",
-    feature3Title: "Trusted on Both Sides",
-    feature3Desc: "Reviews, profiles, and verified credentials so every match — client or trade — starts with confidence.",
+    videoLabel: "TradeLink commercial",
     footerText: "© 2026 TradeLink. All rights reserved.",
   },
   es: {
@@ -21,12 +16,7 @@ const content = {
     subtitle:
       "TradeLink te ayuda a conectar, colaborar y entregar — todo en un espacio de trabajo limpio y poderoso.",
     cta: "Empecemos a trabajar",
-    feature1Title: "Encuentra al Profesional Ideal",
-    feature1Desc: "Publica tu proyecto y conecta al instante con profesionales verificados — electricistas, fontaneros, constructores y más — listos para trabajar.",
-    feature2Title: "Oficios, Encuentra tu Próximo Trabajo",
-    feature2Desc: "Explora proyectos locales que buscan tus habilidades. Consigue más trabajo con obras y propietarios que necesitan exactamente lo que ofreces.",
-    feature3Title: "Confianza en Ambos Lados",
-    feature3Desc: "Reseñas, perfiles y credenciales verificadas para que cada conexión — cliente o profesional — comience con seguridad.",
+    videoLabel: "Comercial de TradeLink",
     footerText: "© 2026 TradeLink. Todos los derechos reservados.",
   },
 };
@@ -93,22 +83,20 @@ export default function PonsLanding() {
         </button>
       </section>
 
-      {/* Features */}
+      {/* Commercial video */}
       <section className="px-6 pb-24 max-w-5xl mx-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          {[
-            { icon: "🤝", title: t.feature1Title, desc: t.feature1Desc, color: "from-sky-400 to-sky-300",      bg: "bg-sky-50/80",    border: "border-sky-100"    },
-            { icon: "⚡", title: t.feature2Title, desc: t.feature2Desc, color: "from-amber-400 to-yellow-300", bg: "bg-yellow-50/80", border: "border-yellow-100" },
-            { icon: "📊", title: t.feature3Title, desc: t.feature3Desc, color: "from-sky-400 to-amber-400",    bg: "bg-amber-50/80",  border: "border-amber-100"  },
-          ].map((f) => (
-            <div key={f.title} className={`${f.bg} border ${f.border} rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow backdrop-blur-sm`}>
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${f.color} flex items-center justify-center text-xl mb-4 shadow`}>
-                {f.icon}
-              </div>
-              <h3 className="font-bold text-slate-700 text-lg mb-2">{f.title}</h3>
-              <p className="text-slate-500 text-sm leading-relaxed">{f.desc}</p>
-            </div>
-          ))}
+        <div className="relative rounded-3xl p-1.5 bg-gradient-to-br from-sky-400 via-sky-300 to-amber-400 shadow-2xl shadow-sky-200/60">
+          <video
+            className="w-full aspect-video rounded-[1.25rem] bg-slate-900 object-cover"
+            src="/videos/tradelink-commercial.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+            controls
+            preload="metadata"
+            aria-label={t.videoLabel}
+          />
         </div>
       </section>
 

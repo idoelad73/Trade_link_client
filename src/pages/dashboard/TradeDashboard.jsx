@@ -9,7 +9,6 @@ import { completeOnboarding, startOnboarding } from '../../api/tradeStripe.js';
 import { toast } from '../../utils/toast.js';
 import TradeInfoModal from '../../components/trade/TradeInfoModal.jsx';
 import TradeSchedule from '../../components/trade/TradeSchedule.jsx';
-import AvailabilityMessagesModal from '../../components/trade/AvailabilityMessagesModal.jsx';
 import ContractorGradesListModal from '../../components/trade/ContractorGradesListModal.jsx';
 
 const content = {
@@ -72,7 +71,6 @@ export default function TradeDashboard() {
   const [sidebarOpen,     setSidebarOpen]     = useState(false);
   const [activeView,      setActiveView]      = useState('schedule');
   const [modalOpen,       setModalOpen]       = useState(false);
-  const [messagesOpen,    setMessagesOpen]    = useState(false);
   const [tradeData,       setTradeData]       = useState(null);
   const [dataLoading,     setDataLoading]     = useState(true);
   const [approvedDates,       setApprovedDates]       = useState([]);
@@ -286,7 +284,7 @@ export default function TradeDashboard() {
 
             <div className="my-2 border-t border-slate-100" />
 
-            <button onClick={() => { setMessagesOpen(true); setSidebarOpen(false); }}
+            <button onClick={() => { setSidebarOpen(false); navigate('/dashboard/trade/messages'); }}
               className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all text-left w-full">
               <span className="text-base">📩</span>
               <span>Availability Messages</span>
@@ -365,7 +363,7 @@ export default function TradeDashboard() {
 
             {/* Photo + availability messages badge */}
             <button
-              onClick={() => setMessagesOpen(true)}
+              onClick={() => navigate('/dashboard/trade/messages')}
               className="flex items-center gap-1.5 rounded-xl hover:bg-amber-50 px-1.5 sm:px-2 py-1 transition group"
               title="Availability Messages"
             >
@@ -469,20 +467,6 @@ export default function TradeDashboard() {
             getGradableContractors()
               .then(setGradableContractors)
               .catch(() => {});
-          }}
-        />
-      )}
-      {messagesOpen   && (
-        <AvailabilityMessagesModal
-          onClose={() => {
-            setMessagesOpen(false);
-            // Always re-fetch after closing messages — booking may have been
-            // created by the contractor directly (approveAvailabilityRequest)
-            getMe().then(setTradeData).catch(console.error);
-          }}
-          onApproved={(date) => {
-            getMe().then(setTradeData).catch(console.error);
-            if (date) setApprovedDates((prev) => [...prev, date]);
           }}
         />
       )}

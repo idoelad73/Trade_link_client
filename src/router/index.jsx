@@ -19,10 +19,13 @@ import PonsLanding from '../PonsLanding';
 import RegistrationArea from '../pages/RegistrationArea';
 import TradeRegister from '../pages/register/TradeRegister';
 import ContractorRegister from '../pages/register/ContractorRegister';
+import ContractorAreaPreview from '../pages/register/ContractorAreaPreview';
+import TradeAreaPreview from '../pages/register/TradeAreaPreview';
 import ContractorDashboard from '../pages/dashboard/ContractorDashboard';
 import TradeDashboard from '../pages/dashboard/TradeDashboard';
 import WorkPlanPage from '../pages/dashboard/WorkPlanPage';
 import JobResultsPage from '../pages/dashboard/JobResultsPage';
+import JobDetailsPage from '../pages/dashboard/JobDetailsPage';
 import TradeSearchResultsPage from '../pages/dashboard/TradeSearchResultsPage';
 import PaymentApprovalsPage from '../pages/dashboard/PaymentApprovalsPage';
 import TradePaymentApprovedPage from '../pages/dashboard/TradePaymentApprovedPage';
@@ -35,6 +38,8 @@ import ResetPasswordPage from '../pages/ResetPasswordPage';
 import MyReceiptsPage from '../pages/dashboard/MyReceiptsPage';
 import TradeReceiptsPage from '../pages/dashboard/TradeReceiptsPage';
 import TradeProfilePage from '../pages/dashboard/TradeProfilePage';
+import ContractorApplicationsPage from '../pages/dashboard/ContractorApplicationsPage';
+import TradeMessagesPage from '../pages/dashboard/TradeMessagesPage';
 
 const router = createBrowserRouter(
   createRoutesFromElements(
@@ -44,6 +49,8 @@ const router = createBrowserRouter(
       <Route path="/register" element={<RegistrationArea />} />
       <Route path="/projects" element={<ProjectsShowcase />} />
       <Route path="/trades"   element={<TradesShowcase />} />
+      <Route path="/register/contractor-area" element={<ContractorAreaPreview />} />
+      <Route path="/register/trade-area" element={<TradeAreaPreview />} />
       <Route path="/register/trade" element={<TradeRegister />} />
       <Route path="/register/contractor" element={<ContractorRegister />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -56,11 +63,14 @@ const router = createBrowserRouter(
       <Route path="/dashboard/contractor/payment-approvals"  element={<PaymentApprovalsPage />} />
       <Route path="/dashboard/contractor/trade-reviews/:tradeId" element={<TradeReviewsPage />} />
       <Route path="/dashboard/contractor/trade-profile/:tradeId" element={<TradeProfilePage />} />
+      <Route path="/dashboard/contractor/applications"          element={<ContractorApplicationsPage />} />
       <Route path="/dashboard/contractor/receipts"              element={<MyReceiptsPage />} />
       <Route path="/dashboard/trade"                         element={<TradeDashboard />} />
       <Route path="/dashboard/trade/jobs"                  element={<JobResultsPage />} />
+      <Route path="/dashboard/trade/jobs/:siteId"          element={<JobDetailsPage />} />
       <Route path="/dashboard/trade/payment-approved"                    element={<TradePaymentApprovedPage />} />
       <Route path="/dashboard/trade/contractor-reviews/:contractorId"   element={<ContractorReviewsPage />} />
+      <Route path="/dashboard/trade/messages"                           element={<TradeMessagesPage />} />
       <Route path="/dashboard/trade/receipts"                           element={<TradeReceiptsPage />} />
 
       {/* Auth — uncomment when pages are built */}

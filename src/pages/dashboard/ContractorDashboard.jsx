@@ -4,14 +4,13 @@ import Swal from 'sweetalert2';
 import useAuthStore from '../../stores/authStore.js';
 import useUIStore from '../../stores/uiStore.js';
 import { logout } from '../../api/auth.js';
-import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades, getSiteDepositSummary, getPendingDeposits } from '../../api/contractor.js';
+import { getSites, findTradesForSite, updateSite, getApplications, getPaymentApprovalsCount, getGradableTrades, getSiteDepositSummary, getPendingDeposits, updateRateComment, deleteRateComment } from '../../api/contractor.js';
 import { TRADE_PROFESSIONALITIES } from '../../constants/trades.js';
 import useTradeRate from '../../hooks/useTradeRate.js';
 import ContractorInfoModal from '../../components/contractor/ContractorInfoModal.jsx';
 import AddSiteModal from '../../components/contractor/AddSiteModal.jsx';
 import ManageTradesModal from '../../components/contractor/ManageTradesModal.jsx';
 import UpdateSitePhotoModal from '../../components/contractor/UpdateSitePhotoModal.jsx';
-import ContractorApplicationsModal from '../../components/contractor/ContractorApplicationsModal.jsx';
 import DepositSummaryModal from '../../components/contractor/DepositSummaryModal.jsx';
 import TradeGradesListModal from '../../components/contractor/TradeGradesListModal.jsx';
 import RateCommentModal from '../../components/shared/RateCommentModal.jsx';
@@ -39,7 +38,8 @@ const content = {
       findBtn:     'Find',
       within:      'within',
       radius:      { title: 'Search Radius', desc: 'Maximum distance from your projects' },
-      rateCommentTitle: 'View rate comments',
+      rateCommentTitle: 'Edit rate comments',
+      rateCommentAdd:   'Add rate comments',
     },
     results: {
       title:      (trade, site) => `${trade} professionals near project "${site}"`,
@@ -76,7 +76,8 @@ const content = {
       findBtn:     'Buscar',
       within:      'en',
       radius:      { title: 'Radio de Búsqueda', desc: 'Distancia máxima desde tus proyectos' },
-      rateCommentTitle: 'Ver comentarios de tarifa',
+      rateCommentTitle: 'Editar comentarios de tarifa',
+      rateCommentAdd:   'Agregar comentarios de tarifa',
     },
     results: {
       title:      (trade, site) => `Profesionales de ${trade} cerca del proyecto "${site}"`,
@@ -188,7 +189,7 @@ function fmtDate(dateKey) {
 }
 
 // ── Site card with per-site trade picker ─────────────────────────────────────
-function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, onManageTrades, onUpdatePhoto, onWorkPlan, onViewRateComment, onSiteMessages, searchState }) {
+function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, onManageTrades, onUpdatePhoto, onWorkPlan, onEditRateComment, onSiteMessages, searchState }) {
   const statusLabel   = t.status[site.status] ?? site.status;
   const isSearching   = searchState?.loading;
   const hasNoTrades   = !site.tradesNeeded?.length;
@@ -382,19 +383,22 @@ function SiteCard({ site, t, displayDist, selectedTrade, onSelectTrade, onFind, 
                       </span>
                   </button>
 
-                  {/* Rate comments — corner badge, so the chip stays compact.
-                      Only rendered when the contractor actually wrote one. */}
-                  {tr.rateComment?.trim() && (
-                    <button
-                      type="button"
-                      title={t.findTrade?.rateCommentTitle ?? 'View rate comments'}
-                      aria-label={`Rate comments for ${tr.name}`}
-                      onClick={() => onViewRateComment?.(tr.name, tr.rateComment)}
-                      className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border-2 border-amber-400 text-[11px] leading-none flex items-center justify-center shadow-sm hover:bg-amber-100 hover:scale-110 transition active:scale-95 z-10"
-                    >
-                      💬
-                    </button>
-                  )}
+                  {/* Rate comments — corner badge, so the chip stays compact. Always
+                      shown so the contractor can add / edit / delete at any time;
+                      faded when there is no comment yet. */}
+                  <button
+                    type="button"
+                    title={tr.rateComment?.trim()
+                      ? (t.findTrade?.rateCommentTitle ?? 'Edit rate comments')
+                      : (t.findTrade?.rateCommentAdd ?? 'Add rate comments')}
+                    aria-label={`Rate comments for ${tr.name}`}
+                    onClick={(e) => { e.stopPropagation(); onEditRateComment?.(site, tr); }}
+                    className={`absolute -top-2 -right-2 w-6 h-6 rounded-full bg-white border-2 text-[11px] leading-none flex items-center justify-center shadow-sm hover:bg-amber-100 hover:scale-110 transition active:scale-95 z-10 ${
+                      tr.rateComment?.trim() ? 'border-amber-400' : 'border-slate-200 opacity-50 hover:opacity-100'
+                    }`}
+                  >
+                    💬
+                  </button>
                   </div>
                 );
               })}
@@ -650,7 +654,6 @@ export default function ContractorDashboard() {
   const [manageSite,   setManageSite]   = useState(null);
   const [photoSite,    setPhotoSite]    = useState(null);
   const [selection,            setSelection]            = useState(null);
-  const [applicationsOpen,     setApplicationsOpen]     = useState(false);
   const [applicationsCount,    setApplicationsCount]    = useState(0);
   const [depositData,          setDepositData]          = useState(null); // { siteId, siteName, rows, total }
   const [pendingDeposits,      setPendingDeposits]      = useState([]);   // approved-but-unpaid deposits (stuck flow)
@@ -659,7 +662,7 @@ export default function ContractorDashboard() {
   const [gradableTradesCount,  setGradableTradesCount]  = useState(0);    // for badge
   const [gradeLoading,         setGradeLoading]         = useState(false);
   const [tradeFilter,          setTradeFilter]          = useState('');
-  const [rateCommentView,      setRateCommentView]      = useState(null); // { tradeName, text }
+  const [rateCommentEdit,      setRateCommentEdit]      = useState(null); // { siteId, tradeName, text }
   const [messagesSite,         setMessagesSite]         = useState(null); // site whose messages modal is open
 
   const refreshApplicationCount = () =>
@@ -939,7 +942,7 @@ export default function ContractorDashboard() {
               )}
             </button>
 
-            <button onClick={() => { setApplicationsOpen(true); setSidebarOpen(false); }}
+            <button onClick={() => { setSidebarOpen(false); navigate('/dashboard/contractor/applications'); }}
               className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all text-left w-full">
               <span className="text-base">📋</span>
               <span>Job Applications</span>
@@ -1024,7 +1027,7 @@ export default function ContractorDashboard() {
             </button>
 
             <button
-              onClick={() => setApplicationsOpen(true)}
+              onClick={() => navigate('/dashboard/contractor/applications')}
               className="flex items-center gap-1.5 rounded-xl hover:bg-amber-50 px-1.5 sm:px-2 py-1 transition group"
               title="Job Applications"
             >
@@ -1171,7 +1174,7 @@ export default function ContractorDashboard() {
                         onManageTrades={setManageSite}
                         onUpdatePhoto={setPhotoSite}
                         onWorkPlan={(siteId) => navigate(`/dashboard/contractor/work-plan/${siteId}`)}
-                        onViewRateComment={(tradeName, text) => setRateCommentView({ tradeName, text })}
+                        onEditRateComment={(s, tr) => setRateCommentEdit({ siteId: s._id, tradeName: tr.name, text: tr.rateComment ?? '' })}
                         onSiteMessages={setMessagesSite}
                         searchState={findingFor?.siteId === site._id ? { loading: true } : null}
                       />
@@ -1201,12 +1204,6 @@ export default function ContractorDashboard() {
           onUpdated={handleTradesUpdated}
         />
       )}
-      {applicationsOpen && (
-        <ContractorApplicationsModal
-          onClose={() => setApplicationsOpen(false)}
-          onApproved={() => { refreshApplicationCount(); refreshSites(); }}
-        />
-      )}
 
       {/* All messages for one project, opened from the card's 📬 Messages */}
       {messagesSite && (
@@ -1216,13 +1213,31 @@ export default function ContractorDashboard() {
         />
       )}
 
-      {/* Read-only view of a trade's rate explanation, opened from a chip's 💬 */}
-      {rateCommentView && (
+      {/* Add / edit / delete a trade's rate explanation, opened from a chip's 💬 */}
+      {rateCommentEdit && (
         <RateCommentModal
-          tradeName={rateCommentView.tradeName}
-          value={rateCommentView.text}
-          readOnly
-          onClose={() => setRateCommentView(null)}
+          tradeName={rateCommentEdit.tradeName}
+          value={rateCommentEdit.text}
+          onSave={async (text) => {
+            try {
+              const updated = text
+                ? await updateRateComment(rateCommentEdit.siteId, rateCommentEdit.tradeName, text)
+                : await deleteRateComment(rateCommentEdit.siteId, rateCommentEdit.tradeName);
+              handleTradesUpdated(updated);
+            } catch (err) {
+              Swal.fire({ icon: 'error', title: 'Could not save the comment', text: err?.response?.data?.message ?? '', confirmButtonColor: '#f59e0b' });
+              throw err;
+            }
+          }}
+          onDelete={async () => {
+            try {
+              handleTradesUpdated(await deleteRateComment(rateCommentEdit.siteId, rateCommentEdit.tradeName));
+            } catch (err) {
+              Swal.fire({ icon: 'error', title: 'Could not delete the comment', confirmButtonColor: '#f59e0b' });
+              throw err;
+            }
+          }}
+          onClose={() => setRateCommentEdit(null)}
         />
       )}
 

@@ -10,6 +10,11 @@ export const getSites    = ()      => api.get('/contractor/sites').then(r => r.d
 export const getSite     = (id)    => api.get(`/contractor/sites/${id}`).then(r => r.data.site);
 export const updateSite  = (id, form) => api.patch(`/contractor/sites/${id}`, form).then(r => r.data.site);
 export const deleteSite  = (id)    => api.delete(`/contractor/sites/${id}`).then(r => r.data);
+// Rate explanation for one trade slot (also stored as a total_hours_explanations message)
+export const updateRateComment = (siteId, tradeName, text) =>
+  api.put(`/contractor/sites/${siteId}/rate-comment`, { tradeName, text }).then(r => r.data.site);
+export const deleteRateComment = (siteId, tradeName) =>
+  api.delete(`/contractor/sites/${siteId}/rate-comment`, { params: { tradeName } }).then(r => r.data.site);
 
 // Trade search
 export const findTradesForSite = (siteId, trade, distance, unit, maxRate, minRating) =>

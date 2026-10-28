@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getTradeProProfile } from '../../api/contractor.js';
+import TradeCalendarModal from '../../components/contractor/TradeCalendarModal.jsx';
 
 const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 const DAY_FULL = {
@@ -32,6 +33,9 @@ function Stars({ avg, size = 16 }) {
 export default function TradeProfilePage() {
   const { tradeId } = useParams();
   const navigate    = useNavigate();
+  // Set when opened from Schedule on the trade search results — enables the Schedule button
+  const schedule    = useLocation().state?.schedule ?? null;
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const [pro,      setPro]      = useState(null);
   const [loading,  setLoading]  = useState(true);
@@ -46,7 +50,7 @@ export default function TradeProfilePage() {
   const hasHours  = DAYS.some(d => wh[d]?.active);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-yellow-50 to-amber-50 font-sans text-slate-800">
+    <div className={`min-h-screen bg-gradient-to-br from-sky-50 via-yellow-50 to-amber-50 font-sans text-slate-800 ${schedule ? 'pb-28' : ''}`}>
 
       {/* ── Top bar ──────────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-yellow-100 shadow-sm px-4 sm:px-8 py-3 flex items-center gap-4">
@@ -174,6 +178,34 @@ export default function TradeProfilePage() {
           )}
 
         </main>
+      )}
+
+      {/* ── Sticky Schedule bar (only when coming from a trade search) ── */}
+      {schedule && !loading && pro && (
+        <div className="fixed bottom-0 inset-x-0 z-30 bg-white/90 backdrop-blur-md border-t border-slate-100 px-4 py-4">
+          <div className="max-w-2xl mx-auto">
+            <button
+              onClick={() => setCalendarOpen(true)}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-base font-extrabold text-white bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 shadow-lg shadow-orange-200 transition active:scale-[0.99]"
+            >
+              📅 Schedule {pro.fullName}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {calendarOpen && schedule && (
+        <TradeCalendarModal
+          tradeId={tradeId}
+          siteName={schedule.siteName}
+          siteAddress={schedule.siteAddress}
+          siteId={schedule.siteId}
+          requiredDate={schedule.requiredDate ?? null}
+          tradeName={schedule.tradeName ?? ''}
+          workersNo={schedule.workersNo ?? 0}
+          mySiteNames={schedule.mySiteNames ?? []}
+          onClose={() => setCalendarOpen(false)}
+        />
       )}
 
       {/* ── Lightbox ─────────────────────────────────────────────────────── */}

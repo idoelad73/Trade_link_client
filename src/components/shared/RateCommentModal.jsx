@@ -21,6 +21,9 @@ const content = {
     placeholder: 'Explain how you set this budget — e.g. scope included, materials, access constraints, why the total is what it is…',
     empty:       'The contractor has not added an explanation for this rate.',
     save:        'Save Comment',
+    saving:      'Saving…',
+    delete:      'Delete',
+    confirmDel:  'Delete this comment?',
     cancel:      'Cancel',
     close:       'Close',
     remaining:   (n) => `${n} characters left`,
@@ -33,6 +36,9 @@ const content = {
     placeholder: 'Explica cómo definiste este presupuesto — alcance incluido, materiales, restricciones de acceso, por qué el total es ese…',
     empty:       'El contratista no agregó una explicación para esta tarifa.',
     save:        'Guardar Comentario',
+    saving:      'Guardando…',
+    delete:      'Eliminar',
+    confirmDel:  '¿Eliminar este comentario?',
     cancel:      'Cancelar',
     close:       'Cerrar',
     remaining:   (n) => `${n} caracteres restantes`,
@@ -43,13 +49,15 @@ export default function RateCommentModal({
   tradeName,
   value = '',
   readOnly = false,
-  onSave,     // (text) => void — only called when readOnly is false
+  onSave,     // (text) => void | Promise — only called when readOnly is false; a rejected promise keeps the modal open
+  onDelete,   // optional () => Promise — shows a Delete button when there is a saved comment
   onClose,
 }) {
   const lang = useUIStore((s) => s.lang);
   const t    = content[lang] ?? content.en;
 
   const [text, setText] = useState(value ?? '');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const h = (e) => { if (e.key === 'Escape') onClose(); };
@@ -57,10 +65,20 @@ export default function RateCommentModal({
     return () => document.removeEventListener('keydown', h);
   }, [onClose]);
 
-  const handleSave = () => {
-    onSave?.(text.trim().slice(0, MAX_LEN));
-    onClose();
+  const run = async (fn) => {
+    setBusy(true);
+    try {
+      await fn();
+      onClose();
+    } catch {
+      // caller shows the error; keep the modal open so the text isn't lost
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const handleSave   = () => run(() => onSave?.(text.trim().slice(0, MAX_LEN)));
+  const handleDelete = () => { if (window.confirm(t.confirmDel)) run(() => onDelete()); };
 
   return (
     <div
@@ -125,10 +143,20 @@ export default function RateCommentModal({
             <>
               <button
                 onClick={handleSave}
-                className="flex-1 bg-gradient-to-r from-amber-500 to-orange-400 hover:from-amber-400 text-white font-semibold py-2.5 rounded-xl text-sm shadow shadow-amber-200 transition-all active:scale-[0.98]"
+                disabled={busy}
+                className="flex-1 disabled:opacity-60 bg-gradient-to-r from-amber-500 to-orange-400 hover:from-amber-400 text-white font-semibold py-2.5 rounded-xl text-sm shadow shadow-amber-200 transition-all active:scale-[0.98]"
               >
-                {t.save}
+                {busy ? t.saving : t.save}
               </button>
+              {onDelete && value?.trim() && (
+                <button
+                  onClick={handleDelete}
+                  disabled={busy}
+                  className="px-4 py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 font-semibold text-sm transition disabled:opacity-60"
+                >
+                  {t.delete}
+                </button>
+              )}
               <button
                 onClick={onClose}
                 className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 font-medium text-sm transition"
